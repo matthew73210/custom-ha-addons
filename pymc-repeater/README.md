@@ -1,5 +1,7 @@
 # pyMC Repeater Home Assistant Add-on
 
+Not usefull as https://github.com/pyMC-dev
+
 This add-on packages the pyMC Repeater daemon for Home Assistant Supervisor. It is an independent wrapper and is not maintained or endorsed by pyMC upstream.
 
 pyMC Repeater is a Python MeshCore repeater daemon built on `pymc_core`: https://github.com/pyMC-dev/pyMC_Repeater
