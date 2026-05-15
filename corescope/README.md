@@ -1,5 +1,7 @@
 # CoreScope Home Assistant Add-on
 
+Ingress doesn't work right now, you'll need to use external access
+
 CoreScope is a self-hosted MeshCore packet analyzer with a web UI, API, MQTT ingestion, SQLite persistence, maps, packet views, and node analytics.
 
 This add-on packages CoreScope for Home Assistant Supervisor. It is an independent wrapper and is not maintained or endorsed by CoreScope upstream.
