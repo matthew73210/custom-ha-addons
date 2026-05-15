@@ -21,11 +21,13 @@ pyMC Repeater is a Python MeshCore repeater daemon built on `pymc_core`: https:/
 
 Home Assistant ingress is enabled. Open the add-on from the Home Assistant sidebar or from the add-on page with **Open Web UI**.
 
-The pyMC dashboard still listens on port `8000` inside the container. Home Assistant ingress connects to a lightweight Nginx proxy on port `8099`, and that proxy forwards to pyMC on `127.0.0.1:8000`.
+The pyMC dashboard listens only inside the container on `127.0.0.1:8000`. Home Assistant ingress connects to a lightweight Nginx wrapper proxy on port `8080`, and that proxy forwards to pyMC.
 
-The proxy preserves request methods, query strings, request bodies, form posts, cookies, authorization headers, redirects, streaming responses, and WebSocket upgrades. The wrapper also patches the upstream web UI during the Docker build so root-relative assets, image paths, API calls, document routes, event streams, and WebSocket URLs resolve through the Home Assistant ingress path.
+The proxy preserves request methods, query strings, request bodies, form posts, cookies, authorization headers, redirects, streaming responses, and WebSocket upgrades. It also rewrites response paths at the proxy layer so pyMC's root-relative routes, assets, image paths, API calls, document routes, event streams, and WebSocket URLs resolve through the Home Assistant ingress path.
 
-Both `8000/tcp` and `8099/tcp` are disabled on the host by default. If you manually expose port `8000`, you are accessing pyMC directly and bypassing the Home Assistant ingress path prefix. Direct access may behave differently from ingress because ingress serves the app under a Home Assistant URL prefix.
+Both `8000/tcp` and `8080/tcp` are disabled on the host by default. If you manually expose the proxy port, you are accessing pyMC without the Home Assistant ingress path prefix. Direct access may behave differently from ingress because ingress serves the app under a Home Assistant URL prefix like `/api/hassio_ingress/<token>/`.
+
+This add-on does not modify upstream pyMC Repeater Python, HTML, JavaScript, CSS, image, or static files. Ingress compatibility is handled by wrapper-owned add-on files and Nginx response rewriting.
 
 ## Configuration And Persistence
 
@@ -41,7 +43,7 @@ The persistent add-on config lives at:
 /config/pymc-repeater/config.yaml
 ```
 
-At startup, the add-on links `/etc/pymc_repeater` to `/config/pymc-repeater`. On first start, if no persistent config exists, the add-on creates one from the add-on options. On later restarts, it reuses the existing persistent config and does not overwrite it.
+At startup, the add-on links `/etc/pymc_repeater` to `/config/pymc-repeater`. On first start, if no persistent config exists, the add-on creates one from the add-on options. On later restarts, it reuses the existing persistent config and only updates wrapper-managed runtime fields such as the internal HTTP bind address and storage path when needed.
 
 Normal users should change settings in the Home Assistant add-on **Configuration** tab. Those settings are stored by Supervisor in the add-on options and are used by this wrapper when it creates or replaces the generated pyMC config. Advanced users can edit `/config/pymc-repeater/config.yaml` directly when they need upstream pyMC settings that are not exposed in the add-on UI.
 
@@ -56,12 +58,12 @@ Changing add-on options after the first generated config exists will not rewrite
 `config_yaml` is a full upstream YAML override. When it is non-empty, the add-on writes it to the persistent config on every startup, then enforces wrapper-managed runtime fields:
 
 - `storage.storage_dir: /var/lib/pymc_repeater`
-- `http.host: 0.0.0.0`
+- `http.host: 127.0.0.1`
 - `http.port: 8000`
 - `logging.level` from the add-on option
 - `repeater.identity_file: /etc/pymc_repeater/identity.key` when no `identity_key` is provided
 
-If `config_yaml` is empty and the persistent config exists, restarts reuse the persistent config instead of rewriting it. If `config_yaml` is empty and no persistent config exists, the add-on generates a first-start config from the visible add-on options.
+If `config_yaml` is empty and the persistent config exists, restarts reuse the persistent config instead of regenerating it, apart from the wrapper-managed runtime fields above. If `config_yaml` is empty and no persistent config exists, the add-on generates a first-start config from the visible add-on options.
 
 ## Add-on Options
 

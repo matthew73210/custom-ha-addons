@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
-bashio::log.info "Starting pyMC Repeater ingress proxy on port 8099."
+bashio::log.info "Starting pyMC Repeater ingress proxy on port 8080."
 exec nginx -g "daemon off;"

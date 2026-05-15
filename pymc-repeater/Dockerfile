@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.2
+ARG BUILD_VERSION=0.2.3
 ARG BUILD_ARCH=amd64
 ARG PYMC_REPEATER_REF=main
 
@@ -42,17 +42,6 @@ WORKDIR ${INSTALL_DIR}
 
 RUN git clone --depth 1 --branch "${PYMC_REPEATER_REF}" https://github.com/pyMC-dev/pyMC_Repeater.git .
 
-COPY rootfs /tmp/rootfs
-
-RUN cp /tmp/rootfs/opt/pymc_repeater/ha-ingress.js repeater/web/html/ha-ingress.js \
-  && sed -i \
-    -e 's#href="/favicon.ico"#href="favicon.ico"#g' \
-    -e 's#src="/assets/#src="assets/#g' \
-    -e 's#href="/assets/#href="assets/#g' \
-    -e 's#<script type="module"#<script src="ha-ingress.js"></script>\n    <script type="module"#' \
-    repeater/web/html/index.html \
-  && python3 /tmp/rootfs/opt/pymc_repeater/patch-web-ui.py
-
 RUN python3 -m venv --system-site-packages /opt/venv \
   && pip install --no-cache-dir --upgrade pip setuptools wheel \
   && pip install --no-cache-dir . \
@@ -69,4 +58,4 @@ RUN chmod a+x \
     /etc/services.d/pymc-repeater/finish \
   && mkdir -p /config/pymc-repeater /data/pymc-repeater /run/nginx
 
-EXPOSE 8000 8099
+EXPOSE 8080

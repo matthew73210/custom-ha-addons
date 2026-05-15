@@ -21,6 +21,7 @@ fi
 ln -sfn "${DATA_ROOT}" "${VAR_ROOT}"
 
 CONFIG_ACTION="$(python3 - <<'PY'
+import copy
 import json
 import pathlib
 import sys
@@ -77,7 +78,7 @@ def enforce_wrapper_fields(config):
     config["storage"]["storage_dir"] = "/var/lib/pymc_repeater"
 
     config.setdefault("http", {})
-    config["http"]["host"] = "0.0.0.0"
+    config["http"]["host"] = "127.0.0.1"
     config["http"]["port"] = 8000
 
     config.setdefault("logging", {})
@@ -241,7 +242,7 @@ def generated_config():
             "cert_store_dir": "/etc/pymc_repeater/glass",
         },
         "http": {
-            "host": "0.0.0.0",
+            "host": "127.0.0.1",
             "port": 8000,
         },
         "logging": {
@@ -265,7 +266,14 @@ if raw_config:
     write_config(enforce_wrapper_fields(config))
     action = "wrote config_yaml option to persistent config"
 elif config_path.exists():
-    action = "reused existing persistent config"
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+    enforced_config = enforce_wrapper_fields(copy.deepcopy(config))
+    if enforced_config != config:
+        write_config(enforced_config)
+        action = "reused existing persistent config and updated wrapper runtime fields"
+    else:
+        action = "reused existing persistent config"
 else:
     write_config(generated_config())
     action = "created persistent config from add-on options"
