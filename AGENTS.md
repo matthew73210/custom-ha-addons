@@ -19,6 +19,9 @@ This is a Home Assistant Supervisor add-on repository.
 
 - Never commit credentials, secrets, tokens, private URLs, Home Assistant instance details, backup contents, or environment-specific configuration.
 - Prefer placeholders and documented setup steps over hard-coded private values.
+- Do not vendor third-party applications unless explicitly requested.
+- Prefer wrapping upstream Docker images or reproducible source builds.
+- Preserve upstream attribution and licensing.
 
 ## After Changes
 

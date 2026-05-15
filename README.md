@@ -19,6 +19,7 @@ Home Assistant Supervisor reads the repository metadata at the root of this repo
 ## Current add-ons
 
 - `placeholder-addon`: a non-production placeholder used only to validate and demonstrate the repository structure.
+- `corescope`: CoreScope packaged as a Home Assistant Supervisor add-on for MeshCore packet analysis.
 
 Remove or replace the placeholder before publishing a real add-on for users.
 
@@ -30,4 +31,4 @@ AlexBelgium does not maintain or endorse this repository.
 
 ## Codex
 
-Codex was used to assist with repository setup and maintenance.
+Codex was used to assist with repository setup, CoreScope packaging, and maintenance.

@@ -1,0 +1,56 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+OPTIONS_PATH="/data/options.json"
+CONFIG_PATH="/config/config.json"
+
+disable_caddy="$(jq -r '.disable_caddy // true' "${OPTIONS_PATH}")"
+disable_mosquitto="$(jq -r '.disable_mosquitto // false' "${OPTIONS_PATH}")"
+mqtt_enabled="$(jq -r '.mqtt_enabled // true' "${OPTIONS_PATH}")"
+mqtt_sources="$(jq -r '(.mqttSources // []) | length' "${CONFIG_PATH}")"
+
+export DB_PATH="/app/data/meshcore.db"
+export CORESCOPE_INGESTOR_STATS="/config/run/ingestor-stats.json"
+
+pids=""
+
+start_background() {
+  "$@" &
+  pids="${pids} $!"
+}
+
+if [ "${mqtt_enabled}" = "true" ] && [ "${disable_mosquitto}" != "true" ]; then
+  bashio::log.info "Starting local Mosquitto listener."
+  start_background /usr/sbin/mosquitto -c /config/mosquitto/mosquitto.conf
+else
+  bashio::log.info "Internal Mosquitto is disabled."
+fi
+
+if [ "${mqtt_sources}" -gt 0 ]; then
+  bashio::log.info "Starting CoreScope MQTT ingestor with ${mqtt_sources} configured source(s)."
+  start_background /app/corescope-ingestor -config /app/config.json
+else
+  bashio::log.warning "No MQTT sources configured; CoreScope will start without packet ingestion."
+fi
+
+if [ "${disable_caddy}" = "true" ]; then
+  bashio::log.info "Starting CoreScope web server on port 80."
+  start_background /app/corescope-server -config-dir /app -db /app/data/meshcore.db -public /app/public -port 80
+else
+  bashio::log.info "Starting CoreScope web server behind Caddy on port 80."
+  start_background /app/corescope-server -config-dir /app -db /app/data/meshcore.db -public /app/public -port 3000
+  start_background /usr/sbin/caddy run --config /config/caddy/Caddyfile
+fi
+
+trap 'bashio::log.info "Stopping CoreScope processes."; kill ${pids} 2>/dev/null || true; wait ${pids} 2>/dev/null || true' TERM INT
+
+set +e
+while true; do
+  for pid in ${pids}; do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      wait "${pid}"
+      exit $?
+    fi
+  done
+  sleep 5
+done
