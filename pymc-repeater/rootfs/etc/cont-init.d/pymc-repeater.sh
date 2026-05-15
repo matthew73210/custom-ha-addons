@@ -20,7 +20,8 @@ if [ -e "${VAR_ROOT}" ] && [ ! -L "${VAR_ROOT}" ]; then
 fi
 ln -sfn "${DATA_ROOT}" "${VAR_ROOT}"
 
-python3 - <<'PY'
+CONFIG_ACTION="$(python3 - <<'PY'
+import hashlib
 import json
 import pathlib
 import sys
@@ -28,16 +29,64 @@ import sys
 import yaml
 
 options_path = pathlib.Path("/data/options.json")
-config_path = pathlib.Path("/config/pymc-repeater/config.yaml")
 config_root = pathlib.Path("/config/pymc-repeater")
+config_path = config_root / "config.yaml"
+raw_hash_path = config_root / ".config_yaml.sha256"
 
 with options_path.open("r", encoding="utf-8") as handle:
     options = json.load(handle)
 
-log_level = str(options.get("log_level") or "info").upper()
-radio_type = str(options.get("radio_type") or "sx1262")
-region = str(options.get("region") or "PAR").upper()
-admin_password = str(options.get("admin_password") or "change_me")
+
+def option_str(name, default=""):
+    value = options.get(name)
+    if value is None:
+        return default
+    value = str(value)
+    return value if value != "" else default
+
+
+def option_int(name, default):
+    value = options.get(name)
+    if value is None or value == "":
+        return default
+    return int(value)
+
+
+def option_float(name, default):
+    value = options.get(name)
+    if value is None or value == "":
+        return default
+    return float(value)
+
+
+def write_config(config):
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = config_path.with_suffix(".yaml.tmp")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(config, handle, default_flow_style=False, sort_keys=False)
+    tmp_path.replace(config_path)
+
+
+def enforce_wrapper_fields(config):
+    if not isinstance(config, dict):
+        raise TypeError("pyMC config must be a YAML mapping/object")
+
+    config.setdefault("repeater", {})
+    if "identity_key" not in config["repeater"]:
+        config["repeater"].setdefault("identity_file", "/etc/pymc_repeater/identity.key")
+
+    config.setdefault("storage", {})
+    config["storage"]["storage_dir"] = "/var/lib/pymc_repeater"
+
+    config.setdefault("http", {})
+    config["http"]["host"] = "0.0.0.0"
+    config["http"]["port"] = 8000
+
+    config.setdefault("logging", {})
+    config["logging"]["level"] = option_str("log_level", "info").upper()
+    config["logging"].setdefault("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    return config
+
 
 presets = {
     "EU_868": {
@@ -87,27 +136,30 @@ presets = {
     },
 }
 
-raw_config = str(options.get("config_yaml") or "").strip()
-if raw_config:
-    try:
-        config = yaml.safe_load(raw_config) or {}
-    except Exception as exc:
-        print(f"Invalid config_yaml option: {exc}", file=sys.stderr)
-        raise
-    if not isinstance(config, dict):
-        raise TypeError("config_yaml must contain a YAML mapping/object")
-else:
-    preset_name = str(options.get("frequency_preset") or "EU_868")
-    radio = dict(presets.get(preset_name, presets["EU_868"]))
+
+def generated_config():
+    preset_name = option_str("frequency_preset", "EU_868").upper()
+    preset = dict(presets.get(preset_name, presets["EU_868"]))
+    radio = {
+        "frequency": option_int("frequency_hz", preset["frequency"]),
+        "tx_power": option_int("tx_power", preset["tx_power"]),
+        "bandwidth": option_int("bandwidth", preset["bandwidth"]),
+        "spreading_factor": option_int("spreading_factor", preset["spreading_factor"]),
+        "coding_rate": option_int("coding_rate", preset["coding_rate"]),
+        "preamble_length": preset["preamble_length"],
+        "sync_word": preset["sync_word"],
+    }
+    map_region = option_str("map_region", option_str("region", "PAR")).upper()
+
     config = {
-        "radio_type": radio_type,
+        "radio_type": option_str("radio_type", "sx1262"),
         "repeater": {
-            "node_name": f"pyMC Repeater {region}",
+            "node_name": option_str("node_name", "pyMC Repeater"),
             "mode": "forward",
-            "latitude": 0.0,
-            "longitude": 0.0,
+            "latitude": option_float("latitude", 0.0),
+            "longitude": option_float("longitude", 0.0),
             "identity_file": "/etc/pymc_repeater/identity.key",
-            "owner_info": "",
+            "owner_info": option_str("public_name", ""),
             "cache_ttl": 3600,
             "max_flood_hops": 64,
             "use_score_for_tx": False,
@@ -116,7 +168,7 @@ else:
             "allow_discovery": True,
             "security": {
                 "max_clients": 1,
-                "admin_password": admin_password,
+                "admin_password": option_str("admin_password", "change_me"),
                 "guest_password": "",
                 "allow_read_only": False,
                 "jwt_secret": "",
@@ -138,8 +190,8 @@ else:
         },
         "radio": radio,
         "kiss": {
-            "port": options.get("kiss_port") or "/dev/ttyUSB0",
-            "baud_rate": int(options.get("kiss_baud_rate") or 115200),
+            "port": option_str("kiss_port", "/dev/ttyUSB0"),
+            "baud_rate": option_int("kiss_baud_rate", 115200),
         },
         "sx1262": {
             "bus_id": 0,
@@ -172,16 +224,16 @@ else:
             },
         },
         "mqtt": {
-            "iata_code": region,
+            "iata_code": map_region,
             "status_interval": 300,
             "owner": "",
             "email": "",
             "brokers": [],
         },
         "glass": {
-            "enabled": False,
-            "base_url": "http://localhost:8080",
-            "inform_interval_seconds": 30,
+            "enabled": bool(options.get("glass_enabled", False)),
+            "base_url": option_str("glass_base_url", "http://localhost:8080"),
+            "inform_interval_seconds": option_int("glass_inform_interval_seconds", 30),
             "request_timeout_seconds": 10,
             "verify_tls": True,
             "api_token": "",
@@ -192,39 +244,46 @@ else:
             "port": 8000,
         },
         "logging": {
-            "level": log_level,
+            "level": option_str("log_level", "info").upper(),
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         },
         "web": {
             "cors_enabled": False,
         },
     }
+    return enforce_wrapper_fields(config)
 
-config.setdefault("repeater", {})
-config["repeater"].setdefault("identity_file", "/etc/pymc_repeater/identity.key")
-config["repeater"].setdefault("security", {})
-config["repeater"]["security"].setdefault("admin_password", admin_password)
-config.setdefault("storage", {})
-config["storage"]["storage_dir"] = "/var/lib/pymc_repeater"
-config.setdefault("http", {})
-config["http"]["host"] = "0.0.0.0"
-config["http"]["port"] = 8000
-config.setdefault("logging", {})
-config["logging"]["level"] = log_level
-config["logging"].setdefault("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-config_path.parent.mkdir(parents=True, exist_ok=True)
-tmp_path = config_path.with_suffix(".yaml.tmp")
-with tmp_path.open("w", encoding="utf-8") as handle:
-    yaml.safe_dump(config, handle, default_flow_style=False, sort_keys=False)
-tmp_path.replace(config_path)
+raw_config = option_str("config_yaml", "").strip()
+if raw_config:
+    raw_hash = hashlib.sha256(raw_config.encode("utf-8")).hexdigest()
+    previous_hash = raw_hash_path.read_text(encoding="utf-8").strip() if raw_hash_path.exists() else ""
+    if not config_path.exists() or previous_hash != raw_hash:
+        try:
+            config = yaml.safe_load(raw_config) or {}
+        except Exception as exc:
+            print(f"Invalid config_yaml option: {exc}", file=sys.stderr)
+            raise
+        write_config(enforce_wrapper_fields(config))
+        raw_hash_path.write_text(raw_hash + "\n", encoding="utf-8")
+        action = "wrote config_yaml override to persistent config"
+    else:
+        action = "reused persistent config from unchanged config_yaml override"
+elif config_path.exists():
+    action = "reused existing persistent config"
+else:
+    write_config(generated_config())
+    action = "created persistent config from add-on options"
 
 identity_path = config_root / "identity.key"
 if identity_path.exists():
     identity_path.chmod(0o600)
+
+print(action)
 PY
+)"
 
 chmod -R u+rwX,g+rwX "${CONFIG_ROOT}" "${DATA_ROOT}"
 
-bashio::log.info "Generated pyMC Repeater config at /etc/pymc_repeater/config.yaml -> ${CONFIG_PATH}."
+bashio::log.info "${CONFIG_ACTION}: /etc/pymc_repeater/config.yaml -> ${CONFIG_PATH}."
 bashio::log.info "Persistent pyMC Repeater data path is /var/lib/pymc_repeater -> ${DATA_ROOT}."
