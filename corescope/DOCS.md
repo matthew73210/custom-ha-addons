@@ -4,11 +4,10 @@
 
 This add-on builds CoreScope from the upstream source repository during the Docker build. It does not vendor or copy the CoreScope source tree into this add-on repository, and it does not pull or run the upstream Docker container from inside the add-on.
 
-The final runtime image uses the Home Assistant add-on base image via:
+The final runtime image uses the Home Assistant add-on base image directly:
 
 ```Dockerfile
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+FROM ghcr.io/home-assistant/base:latest
 ```
 
 This keeps the image compatible with Home Assistant Supervisor while still using CoreScope's upstream Go server, Go ingestor, static web UI, and optional Mosquitto/Caddy runtime components.
@@ -74,7 +73,7 @@ If a future CoreScope release adds absolute URL assumptions that do not work beh
 
 Home Assistant Supervisor can build local add-ons from this repository. For wider distribution, build and publish the add-on image for each supported architecture, then add an `image` field to `config.yaml` that points at the published GHCR image naming pattern.
 
-The upstream prebuilt image `ghcr.io/kpa-clawbot/corescope:latest` is not used as the final add-on base because the requested Home Assistant add-on base image pattern requires `ARG BUILD_FROM` and `FROM ${BUILD_FROM}` for the runtime image.
+The upstream prebuilt image `ghcr.io/kpa-clawbot/corescope:latest` is not used as the final add-on base because this add-on builds CoreScope directly into a Home Assistant add-on image.
 
 ## Upstream
 

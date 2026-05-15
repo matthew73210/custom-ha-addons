@@ -23,9 +23,6 @@ ports_description:
   1883/tcp: "Optional local MQTT listener for MeshCore packet ingestion"
 map:
   - addon_config:rw
-build_from:
-  aarch64: "ghcr.io/home-assistant/aarch64-base:latest"
-  amd64: "ghcr.io/home-assistant/amd64-base:latest"
 options:
   mqtt_enabled: true
   mqtt_port: 1883

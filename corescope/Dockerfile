@@ -1,4 +1,3 @@
-ARG BUILD_FROM
 ARG BUILDPLATFORM=linux/amd64
 
 FROM --platform=${BUILDPLATFORM} golang:1.22-alpine AS builder
@@ -43,7 +42,7 @@ RUN cp -R /src/cmd/decrypt/. ./ \
   && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -ldflags="-s -w" -o /corescope-decrypt .
 
-FROM ${BUILD_FROM}
+FROM ghcr.io/home-assistant/base:latest
 
 ARG BUILD_VERSION=0.1.0
 ARG BUILD_ARCH=amd64
