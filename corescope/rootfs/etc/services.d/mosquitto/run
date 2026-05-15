@@ -1,0 +1,15 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+OPTIONS_PATH="/data/options.json"
+
+disable_mosquitto="$(jq -r '.disable_mosquitto // false' "${OPTIONS_PATH}")"
+mqtt_enabled="$(jq -r '.mqtt_enabled // true' "${OPTIONS_PATH}")"
+
+if [ "${mqtt_enabled}" = "true" ] && [ "${disable_mosquitto}" != "true" ]; then
+  bashio::log.info "Starting local Mosquitto packet relay on 0.0.0.0:$(jq -r '.mqtt_port // 1883' "${OPTIONS_PATH}")."
+  exec /usr/sbin/mosquitto -c /config/mosquitto/mosquitto.conf
+fi
+
+bashio::log.info "Local Mosquitto packet relay is disabled."
+exec sleep 2147483647

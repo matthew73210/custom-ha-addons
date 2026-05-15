@@ -1,0 +1,60 @@
+name: "CoreScope"
+slug: "corescope"
+description: "MeshCore packet analyzer for Home Assistant"
+version: "0.1.0"
+stage: experimental
+url: "https://github.com/matthew73210/custom-ha-addons/tree/main/corescope"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+ingress: true
+ingress_port: 80
+ingress_stream: true
+panel_icon: "mdi:access-point-network"
+webui: "http://[HOST]:[PORT:80]"
+ports:
+  80/tcp: 8099
+  1883/tcp: null
+ports_description:
+  80/tcp: "CoreScope web UI and API"
+  1883/tcp: "Optional local MQTT listener for MeshCore packet ingestion"
+map:
+  - addon_config:rw
+options:
+  mqtt_enabled: true
+  mqtt_port: 1883
+  external_mqtt_sources: []
+  config_json: ""
+  map_region: "PAR"
+  default_region: "SJC"
+  log_level: "info"
+  mosquitto_log_level: "warning"
+  debug_startup: false
+  disable_caddy: true
+  disable_mosquitto: false
+schema:
+  mqtt_enabled: bool
+  mqtt_port: port
+  external_mqtt_sources:
+    - name: str
+      broker: str
+      username: str?
+      password: password?
+      topics:
+        - str
+      iata_filter:
+        - str
+      region: str?
+      reject_unauthorized: bool?
+      connect_timeout_sec: int(1,300)?
+  config_json: str?
+  map_region: str
+  default_region: str
+  log_level: list(trace|debug|info|warn|error)
+  mosquitto_log_level: list(error|warning|notice|information|debug)
+  debug_startup: bool
+  disable_caddy: bool
+  disable_mosquitto: bool
