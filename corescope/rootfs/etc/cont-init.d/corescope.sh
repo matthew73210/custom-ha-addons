@@ -82,9 +82,15 @@ cat > /config/mosquitto/mosquitto.conf <<EOF
 listener ${MQTT_PORT} 0.0.0.0
 allow_anonymous true
 persistence true
-persistence_location /config/mosquitto/
+persistence_location /config/mosquitto
+persistence_file mosquitto.db
 log_dest stdout
 EOF
+
+if id mosquitto >/dev/null 2>&1; then
+  chown -R mosquitto:mosquitto /config/mosquitto
+  chmod -R u+rwX,g+rwX /config/mosquitto
+fi
 
 cat > /config/caddy/Caddyfile <<'EOF'
 :80 {
