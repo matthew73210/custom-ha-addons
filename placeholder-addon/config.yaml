@@ -1,0 +1,13 @@
+name: "Placeholder Add-on"
+version: "0.0.1"
+slug: "placeholder_addon"
+description: "Non-production placeholder add-on for validating repository structure."
+arch:
+  - aarch64
+  - amd64
+startup: once
+boot: manual_only
+init: false
+stage: experimental
+options: {}
+schema: {}
