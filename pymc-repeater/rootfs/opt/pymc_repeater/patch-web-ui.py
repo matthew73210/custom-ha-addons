@@ -11,6 +11,12 @@ for path in ASSETS_DIR.glob("*.js"):
     text = text.replace("`/assets/", "`assets/")
     text = text.replace('"/assets/', '"assets/')
     text = text.replace("'/assets/", "'assets/")
+    text = text.replace("`/images/", "`images/")
+    text = text.replace('"/images/', '"images/')
+    text = text.replace("'/images/", "'images/")
+    text = text.replace("`/static/", "`static/")
+    text = text.replace('"/static/', '"static/')
+    text = text.replace("'/static/", "'static/")
     if "function(e){return`/`+e}" in text:
         text = text.replace(
             "function(e){return`/`+e}",
@@ -25,6 +31,19 @@ for path in ASSETS_DIR.glob("*.js"):
             1,
         )
         patched_router = True
+    path.write_text(text, encoding="utf-8")
+
+for path in ASSETS_DIR.glob("*.css"):
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("url(/assets/", "url(")
+    text = text.replace('url("/assets/', 'url("')
+    text = text.replace("url('/assets/", "url('")
+    text = text.replace("url(/images/", "url(../images/")
+    text = text.replace('url("/images/', 'url("../images/')
+    text = text.replace("url('/images/", "url('../images/")
+    text = text.replace("url(/static/", "url(../static/")
+    text = text.replace('url("/static/', 'url("../static/')
+    text = text.replace("url('/static/", "url('../static/")
     path.write_text(text, encoding="utf-8")
 
 if not patched_preload:

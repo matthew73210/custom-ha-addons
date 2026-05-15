@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.1
+ARG BUILD_VERSION=0.2.2
 ARG BUILD_ARCH=amd64
 ARG PYMC_REPEATER_REF=main
 
@@ -28,6 +28,7 @@ RUN apt-get update \
     jq \
     libffi-dev \
     libusb-1.0-0 \
+    nginx \
     python3 \
     python3-dev \
     python3-pip \
@@ -62,8 +63,10 @@ COPY rootfs /
 
 RUN chmod a+x \
     /etc/cont-init.d/pymc-repeater.sh \
+    /etc/services.d/pymc-repeater-ingress/run \
+    /etc/services.d/pymc-repeater-ingress/finish \
     /etc/services.d/pymc-repeater/run \
     /etc/services.d/pymc-repeater/finish \
-  && mkdir -p /config/pymc-repeater /data/pymc-repeater
+  && mkdir -p /config/pymc-repeater /data/pymc-repeater /run/nginx
 
-EXPOSE 8000
+EXPOSE 8000 8099

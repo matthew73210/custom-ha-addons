@@ -21,9 +21,11 @@ pyMC Repeater is a Python MeshCore repeater daemon built on `pymc_core`: https:/
 
 Home Assistant ingress is enabled. Open the add-on from the Home Assistant sidebar or from the add-on page with **Open Web UI**.
 
-The pyMC dashboard still listens on port `8000` inside the container. Home Assistant connects ingress directly to that internal port with `ingress_port: 8000`, and `8000/tcp` is not exposed on the host by default. If you need direct access for debugging, map the optional port in the add-on network settings.
+The pyMC dashboard still listens on port `8000` inside the container. Home Assistant ingress connects to a lightweight Nginx proxy on port `8099`, and that proxy forwards to pyMC on `127.0.0.1:8000`.
 
-The wrapper patches the upstream web UI during the Docker build so root-relative assets, API calls, document routes, event streams, and WebSocket URLs resolve through the Home Assistant ingress path.
+The proxy preserves request methods, query strings, request bodies, form posts, cookies, authorization headers, redirects, streaming responses, and WebSocket upgrades. The wrapper also patches the upstream web UI during the Docker build so root-relative assets, image paths, API calls, document routes, event streams, and WebSocket URLs resolve through the Home Assistant ingress path.
+
+Both `8000/tcp` and `8099/tcp` are disabled on the host by default. If you manually expose port `8000`, you are accessing pyMC directly and bypassing the Home Assistant ingress path prefix. Direct access may behave differently from ingress because ingress serves the app under a Home Assistant URL prefix.
 
 ## Configuration And Persistence
 
@@ -40,6 +42,8 @@ The persistent add-on config lives at:
 ```
 
 At startup, the add-on links `/etc/pymc_repeater` to `/config/pymc-repeater`. On first start, if no persistent config exists, the add-on creates one from the add-on options. On later restarts, it reuses the existing persistent config and does not overwrite it.
+
+Normal users should change settings in the Home Assistant add-on **Configuration** tab. Those settings are stored by Supervisor in the add-on options and are used by this wrapper when it creates or replaces the generated pyMC config. Advanced users can edit `/config/pymc-repeater/config.yaml` directly when they need upstream pyMC settings that are not exposed in the add-on UI.
 
 Runtime data is stored through the upstream path `/var/lib/pymc_repeater`, which the add-on links to:
 
