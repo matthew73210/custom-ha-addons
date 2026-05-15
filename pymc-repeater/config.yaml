@@ -1,0 +1,75 @@
+name: "pyMC Repeater"
+slug: "pymc-repeater"
+description: "Python MeshCore repeater daemon for Home Assistant"
+version: "0.2.3"
+stage: experimental
+url: "https://github.com/matthew73210/custom-ha-addons/tree/main/pymc-repeater"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+build_from:
+  aarch64: "ghcr.io/home-assistant/aarch64-base-debian:bookworm"
+  amd64: "ghcr.io/home-assistant/amd64-base-debian:bookworm"
+panel_icon: "mdi:radio-tower"
+ingress: true
+ingress_port: 8080
+ingress_stream: true
+webui: "http://[HOST]:[PORT:8080]"
+ports:
+  8000/tcp: null
+  8080/tcp: null
+ports_description:
+  8000/tcp: "Internal pyMC Repeater dashboard port; disabled by default because ingress uses the proxy"
+  8080/tcp: "Optional ingress-compatible proxy access; disabled by default"
+map:
+  - addon_config:rw
+uart: true
+usb: true
+gpio: true
+options:
+  node_name: "pyMC Repeater"
+  public_name: ""
+  latitude: 0.0
+  longitude: 0.0
+  country: "FR"
+  radio_type: "sx1262"
+  map_region: "PAR"
+  frequency_preset: "EU_868"
+  frequency_hz: 869618000
+  tx_power: 14
+  bandwidth: 62500
+  spreading_factor: 8
+  coding_rate: 8
+  kiss_port: "/dev/ttyUSB0"
+  kiss_baud_rate: 115200
+  admin_password: "change_me"
+  glass_enabled: false
+  glass_base_url: "http://localhost:8080"
+  glass_inform_interval_seconds: 30
+  log_level: "info"
+  config_yaml: ""
+schema:
+  node_name: str
+  public_name: str?
+  latitude: float
+  longitude: float
+  country: str
+  radio_type: list(sx1262|sx1262_ch341|kiss)
+  map_region: str
+  frequency_preset: list(EU_868|EU_868_LONG_RANGE|US_915|US_915_LONG_RANGE|AU_915|NZ_917|CUSTOM)
+  frequency_hz: int(100000000,1000000000)
+  tx_power: int(-9,22)
+  bandwidth: int(7800,500000)
+  spreading_factor: int(5,12)
+  coding_rate: int(5,8)
+  kiss_port: str?
+  kiss_baud_rate: int(1200,4000000)
+  admin_password: password
+  glass_enabled: bool
+  glass_base_url: str
+  glass_inform_interval_seconds: int(5,86400)
+  log_level: list(debug|info|warning|error)
+  config_yaml: str?
