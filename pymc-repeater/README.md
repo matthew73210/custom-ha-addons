@@ -21,7 +21,7 @@ pyMC Repeater is a Python MeshCore repeater daemon built on `pymc_core`: https:/
 
 Home Assistant ingress is enabled. Open the add-on from the Home Assistant sidebar or from the add-on page with **Open Web UI**.
 
-The pyMC dashboard still listens on port `8000` inside the container, but `8000/tcp` is not exposed on the host by default. If you need direct access for debugging, map the optional port in the add-on network settings.
+The pyMC dashboard still listens on port `8000` inside the container. Home Assistant connects ingress directly to that internal port with `ingress_port: 8000`, and `8000/tcp` is not exposed on the host by default. If you need direct access for debugging, map the optional port in the add-on network settings.
 
 The wrapper patches the upstream web UI during the Docker build so root-relative assets, API calls, document routes, event streams, and WebSocket URLs resolve through the Home Assistant ingress path.
 
@@ -47,9 +47,9 @@ Runtime data is stored through the upstream path `/var/lib/pymc_repeater`, which
 /data/pymc-repeater
 ```
 
-Changing add-on options after the first generated config exists will not rewrite `/config/pymc-repeater/config.yaml`. Edit the persistent config, delete it to regenerate from options, or use `config_yaml` when you intentionally want to replace it.
+Changing add-on options after the first generated config exists will not rewrite `/config/pymc-repeater/config.yaml`. Edit the persistent config, delete it to regenerate from options, or use `config_yaml` when you intentionally want the add-on options to replace it.
 
-`config_yaml` is a full upstream YAML override. When it is changed, the add-on writes it to the persistent config, then enforces wrapper-managed runtime fields:
+`config_yaml` is a full upstream YAML override. When it is non-empty, the add-on writes it to the persistent config on every startup, then enforces wrapper-managed runtime fields:
 
 - `storage.storage_dir: /var/lib/pymc_repeater`
 - `http.host: 0.0.0.0`
@@ -57,13 +57,14 @@ Changing add-on options after the first generated config exists will not rewrite
 - `logging.level` from the add-on option
 - `repeater.identity_file: /etc/pymc_repeater/identity.key` when no `identity_key` is provided
 
-If `config_yaml` stays unchanged, restarts reuse the persistent config instead of rewriting it every time.
+If `config_yaml` is empty and the persistent config exists, restarts reuse the persistent config instead of rewriting it. If `config_yaml` is empty and no persistent config exists, the add-on generates a first-start config from the visible add-on options.
 
 ## Add-on Options
 
 - `node_name`: upstream `repeater.node_name`
 - `public_name`: stored as upstream `repeater.owner_info`
 - `latitude`, `longitude`: upstream node location fields
+- `country`: stored as generated config metadata at `repeater.country` and `mqtt.country`; upstream currently uses explicit radio settings for regulation
 - `map_region`: upstream `mqtt.iata_code`, default `PAR`
 - `radio_type`: `sx1262`, `sx1262_ch341`, or `kiss`
 - `frequency_preset`: convenience preset for common radio values
@@ -98,7 +99,7 @@ USB, SPI, and GPIO access depends on the Home Assistant host and Supervisor rest
 
 ## Current Mapping Limits
 
-The upstream example does not expose a clear `node_id` field or a dedicated country/regulatory-region field. This wrapper maps node identity to `node_name` and `owner_info`, and maps `map_region` to `mqtt.iata_code`. Frequency regulation remains the operator's responsibility through the radio preset or explicit radio fields.
+The upstream example does not expose a clear `node_id` field or a dedicated country-driven regulatory selector. This wrapper maps node identity to `node_name` and `owner_info`, stores `country` as metadata, and maps `map_region` to `mqtt.iata_code`. Frequency regulation remains the operator's responsibility through the radio preset or explicit radio fields.
 
 ## License And Attribution
 

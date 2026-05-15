@@ -1,7 +1,7 @@
 name: "pyMC Repeater"
 slug: "pymc-repeater"
 description: "Python MeshCore repeater daemon for Home Assistant"
-version: "0.2.0"
+version: "0.2.1"
 stage: experimental
 url: "https://github.com/matthew73210/custom-ha-addons/tree/main/pymc-repeater"
 arch:
@@ -17,6 +17,7 @@ panel_icon: "mdi:radio-tower"
 ingress: true
 ingress_port: 8000
 ingress_stream: true
+webui: "http://[HOST]:[PORT:8000]"
 ports:
   8000/tcp: null
 ports_description:
@@ -31,6 +32,7 @@ options:
   public_name: ""
   latitude: 0.0
   longitude: 0.0
+  country: "FR"
   radio_type: "sx1262"
   map_region: "PAR"
   frequency_preset: "EU_868"
@@ -52,6 +54,7 @@ schema:
   public_name: str?
   latitude: float
   longitude: float
+  country: str
   radio_type: list(sx1262|sx1262_ch341|kiss)
   map_region: str
   frequency_preset: list(EU_868|EU_868_LONG_RANGE|US_915|US_915_LONG_RANGE|AU_915|NZ_917|CUSTOM)

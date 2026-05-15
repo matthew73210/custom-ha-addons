@@ -21,7 +21,6 @@ fi
 ln -sfn "${DATA_ROOT}" "${VAR_ROOT}"
 
 CONFIG_ACTION="$(python3 - <<'PY'
-import hashlib
 import json
 import pathlib
 import sys
@@ -31,7 +30,6 @@ import yaml
 options_path = pathlib.Path("/data/options.json")
 config_root = pathlib.Path("/config/pymc-repeater")
 config_path = config_root / "config.yaml"
-raw_hash_path = config_root / ".config_yaml.sha256"
 
 with options_path.open("r", encoding="utf-8") as handle:
     options = json.load(handle)
@@ -140,6 +138,7 @@ presets = {
 def generated_config():
     preset_name = option_str("frequency_preset", "EU_868").upper()
     preset = dict(presets.get(preset_name, presets["EU_868"]))
+    country = option_str("country", "FR").upper()
     radio = {
         "frequency": option_int("frequency_hz", preset["frequency"]),
         "tx_power": option_int("tx_power", preset["tx_power"]),
@@ -158,6 +157,7 @@ def generated_config():
             "mode": "forward",
             "latitude": option_float("latitude", 0.0),
             "longitude": option_float("longitude", 0.0),
+            "country": country,
             "identity_file": "/etc/pymc_repeater/identity.key",
             "owner_info": option_str("public_name", ""),
             "cache_ttl": 3600,
@@ -225,6 +225,7 @@ def generated_config():
         },
         "mqtt": {
             "iata_code": map_region,
+            "country": country,
             "status_interval": 300,
             "owner": "",
             "email": "",
@@ -256,19 +257,13 @@ def generated_config():
 
 raw_config = option_str("config_yaml", "").strip()
 if raw_config:
-    raw_hash = hashlib.sha256(raw_config.encode("utf-8")).hexdigest()
-    previous_hash = raw_hash_path.read_text(encoding="utf-8").strip() if raw_hash_path.exists() else ""
-    if not config_path.exists() or previous_hash != raw_hash:
-        try:
-            config = yaml.safe_load(raw_config) or {}
-        except Exception as exc:
-            print(f"Invalid config_yaml option: {exc}", file=sys.stderr)
-            raise
-        write_config(enforce_wrapper_fields(config))
-        raw_hash_path.write_text(raw_hash + "\n", encoding="utf-8")
-        action = "wrote config_yaml override to persistent config"
-    else:
-        action = "reused persistent config from unchanged config_yaml override"
+    try:
+        config = yaml.safe_load(raw_config) or {}
+    except Exception as exc:
+        print(f"Invalid config_yaml option: {exc}", file=sys.stderr)
+        raise
+    write_config(enforce_wrapper_fields(config))
+    action = "wrote config_yaml option to persistent config"
 elif config_path.exists():
     action = "reused existing persistent config"
 else:
