@@ -29,6 +29,9 @@ options:
   external_mqtt_sources: []
   config_json: ""
   default_region: "SJC"
+  log_level: "info"
+  mosquitto_log_level: "warning"
+  debug_startup: false
   disable_caddy: true
   disable_mosquitto: false
 schema:
@@ -48,5 +51,8 @@ schema:
       connect_timeout_sec: int(1,300)?
   config_json: str?
   default_region: str
+  log_level: list(trace|debug|info|warn|error)
+  mosquitto_log_level: list(error|warning|notice|information|debug)
+  debug_startup: bool
   disable_caddy: bool
   disable_mosquitto: bool

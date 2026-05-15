@@ -1,20 +1,36 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
-CONFIG_PATH="/config/config.json"
-DATA_DIR="/config/data"
+CONFIG_ROOT="/config/corescope"
+CONFIG_PATH="${CONFIG_ROOT}/config.json"
+DATA_DIR="${CONFIG_ROOT}/data"
+RUN_DIR="${CONFIG_ROOT}/run"
 OPTIONS_PATH="/data/options.json"
+MOSQUITTO_DIR="/config/mosquitto"
 
-mkdir -p "${DATA_DIR}" /config/mosquitto /config/caddy /config/run /app
+mkdir -p "${CONFIG_ROOT}" "${DATA_DIR}" "${RUN_DIR}" "${MOSQUITTO_DIR}" /app
+
+if [ -d /config/data ] && [ ! -e "${DATA_DIR}/meshcore.db" ]; then
+  bashio::log.info "Migrating existing CoreScope data from /config/data to ${DATA_DIR}."
+  cp -an /config/data/. "${DATA_DIR}/" 2>/dev/null || true
+fi
 
 if [ -e /app/data ] && [ ! -L /app/data ]; then
   rm -rf /app/data
 fi
 ln -sfn "${DATA_DIR}" /app/data
 
+chmod -R u+rwX,g+rwX "${CONFIG_ROOT}" "${DATA_DIR}" "${RUN_DIR}"
+
+log_level="$(jq -r '.log_level // "info"' "${OPTIONS_PATH}")"
+
 if [ -f "${OPTIONS_PATH}" ] && jq -e '.config_json? // "" | length > 0' "${OPTIONS_PATH}" >/dev/null; then
-  jq -er '.config_json | fromjson | if type == "object" then . else error("config_json must be a JSON object") end' \
-    "${OPTIONS_PATH}" > "${CONFIG_PATH}.tmp"
+  jq -er --arg db_path "/app/data/meshcore.db" '
+    .config_json
+    | fromjson
+    | if type == "object" then . else error("config_json must be a JSON object") end
+    | .dbPath = $db_path
+  ' "${OPTIONS_PATH}" > "${CONFIG_PATH}.tmp"
   mv "${CONFIG_PATH}.tmp" "${CONFIG_PATH}"
   bashio::log.info "Using custom CoreScope config JSON from add-on options."
 else
@@ -78,22 +94,71 @@ fi
 ln -sfn "${CONFIG_PATH}" /app/config.json
 
 MQTT_PORT="$(jq -r '.mqtt_port // 1883' "${OPTIONS_PATH}")"
-cat > /config/mosquitto/mosquitto.conf <<EOF
+MOSQUITTO_LOG_LEVEL="$(jq -r '.mosquitto_log_level // "warning"' "${OPTIONS_PATH}")"
+
+cat > "${MOSQUITTO_DIR}/mosquitto.conf" <<EOF
 listener ${MQTT_PORT} 0.0.0.0
 allow_anonymous true
-persistence true
-persistence_location /config/mosquitto
-persistence_file mosquitto.db
+persistence false
 log_dest stdout
 EOF
 
+case "${MOSQUITTO_LOG_LEVEL}" in
+  debug)
+    echo "log_type all" >> "${MOSQUITTO_DIR}/mosquitto.conf"
+    ;;
+  information)
+    {
+      echo "log_type information"
+      echo "log_type notice"
+      echo "log_type warning"
+      echo "log_type error"
+    } >> "${MOSQUITTO_DIR}/mosquitto.conf"
+    ;;
+  notice)
+    {
+      echo "log_type notice"
+      echo "log_type warning"
+      echo "log_type error"
+    } >> "${MOSQUITTO_DIR}/mosquitto.conf"
+    ;;
+  error)
+    echo "log_type error" >> "${MOSQUITTO_DIR}/mosquitto.conf"
+    ;;
+  warning|*)
+    {
+      echo "log_type warning"
+      echo "log_type error"
+    } >> "${MOSQUITTO_DIR}/mosquitto.conf"
+    ;;
+esac
+
 if id mosquitto >/dev/null 2>&1; then
-  chown -R mosquitto:mosquitto /config/mosquitto
-  chmod -R u+rwX,g+rwX /config/mosquitto
+  chown -R mosquitto:mosquitto "${MOSQUITTO_DIR}"
+  chmod -R u+rwX,g+rwX "${MOSQUITTO_DIR}"
 fi
 
-cat > /config/caddy/Caddyfile <<'EOF'
-:80 {
-  reverse_proxy 127.0.0.1:3000
-}
-EOF
+if [ "$(jq -r '.debug_startup // false' "${OPTIONS_PATH}")" = "true" ]; then
+  bashio::log.info "[startup] Generated config path: ${CONFIG_PATH}"
+  bashio::log.info "[startup] CoreScope data path: ${DATA_DIR}"
+  bashio::log.info "[startup] CoreScope database path: ${DATA_DIR}/meshcore.db"
+  if [ -L /app/data ]; then
+    bashio::log.info "[startup] /app/data symlink target: $(readlink /app/data)"
+  else
+    bashio::log.warning "[startup] /app/data is not a symlink"
+  fi
+  bashio::log.info "[startup] MQTT listener address: 0.0.0.0:${MQTT_PORT}"
+  bashio::log.info "[startup] Local Mosquitto enabled: $(jq -r '((.mqtt_enabled // true) and ((.disable_mosquitto // false) | not))' "${OPTIONS_PATH}")"
+  bashio::log.info "[startup] External MQTT source count: $(jq -r '(.external_mqtt_sources // []) | length' "${OPTIONS_PATH}")"
+  bashio::log.info "[startup] MQTT subscribed topics: $(jq -r '[.mqttSources[]?.topics[]?] | unique | join(", ")' "${CONFIG_PATH}")"
+  bashio::log.info "[startup] CoreScope log_level option: ${log_level} (not passed through; upstream does not currently expose a working server or ingestor log-level CLI/env control)"
+  bashio::log.info "[startup] Mosquitto log level: ${MOSQUITTO_LOG_LEVEL}"
+  bashio::log.info "[startup] corescope-server binary: $(command -v /app/corescope-server || true)"
+  bashio::log.info "[startup] corescope-ingestor binary: $(command -v /app/corescope-ingestor || true)"
+  bashio::log.info "[startup] mosquitto binary: $(command -v mosquitto || true)"
+  bashio::log.info "[startup] Directory permissions:"
+  ls -ld /config "${CONFIG_ROOT}" "${DATA_DIR}" "${MOSQUITTO_DIR}" | while read -r line; do
+    bashio::log.info "[startup] ${line}"
+  done
+  bashio::log.info "[startup] MQTT sources redacted: $(jq -c '[.mqttSources[]? | {name, broker:((.broker // "") | sub("//[^/@]+@"; "//[redacted]@")), topics, region, username:(if has("username") then "[set]" else null end), password:(if has("password") then "[redacted]" else null end)}]' "${CONFIG_PATH}")"
+fi

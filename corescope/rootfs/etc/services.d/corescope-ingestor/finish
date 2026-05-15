@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+exit_code="${1:-unknown}"
+term_signal="${2:-none}"
+bashio::log.info "CoreScope ingestor service stopped. exit_code=${exit_code} signal=${term_signal}"

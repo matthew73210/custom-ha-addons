@@ -54,7 +54,7 @@ LABEL \
   org.opencontainers.image.source="https://github.com/matthew73210/custom-ha-addons" \
   org.opencontainers.image.description="Home Assistant add-on wrapper for CoreScope"
 
-RUN apk add --no-cache ca-certificates caddy jq mosquitto mosquitto-clients
+RUN apk add --no-cache ca-certificates jq mosquitto mosquitto-clients
 
 WORKDIR /app
 
@@ -65,11 +65,13 @@ COPY --from=builder /src/channel-rainbow.json /app/channel-rainbow.json
 COPY --from=builder /src/LICENSE /usr/share/licenses/corescope/LICENSE
 COPY rootfs /
 
-RUN chmod a+x /etc/services.d/corescope/run \
-    /etc/services.d/corescope-caddy/run \
+RUN chmod a+x /etc/services.d/corescope-server/run \
+    /etc/services.d/corescope-server/finish \
     /etc/services.d/corescope-ingestor/run \
-    /etc/services.d/corescope-mosquitto/run \
+    /etc/services.d/corescope-ingestor/finish \
+    /etc/services.d/mosquitto/run \
+    /etc/services.d/mosquitto/finish \
     /etc/cont-init.d/corescope.sh \
-  && mkdir -p /app/data /config/data /config/mosquitto /config/caddy /config/run
+  && mkdir -p /app/data /config/corescope/data /config/corescope/run /config/mosquitto
 
 EXPOSE 80 1883

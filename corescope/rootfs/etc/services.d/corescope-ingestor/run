@@ -1,15 +1,16 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
-CONFIG_PATH="/config/config.json"
+CONFIG_PATH="/config/corescope/config.json"
 
 mqtt_sources="$(jq -r '(.mqttSources // []) | length' "${CONFIG_PATH}")"
 
 export DB_PATH="/app/data/meshcore.db"
-export CORESCOPE_INGESTOR_STATS="/config/run/ingestor-stats.json"
+export CORESCOPE_INGESTOR_STATS="/config/corescope/run/ingestor-stats.json"
 
 if [ "${mqtt_sources}" -gt 0 ]; then
   bashio::log.info "Starting CoreScope MQTT ingestor with ${mqtt_sources} configured source(s)."
+  bashio::log.info "CoreScope ingestor database path is /app/data/meshcore.db -> /config/corescope/data/meshcore.db."
   exec /app/corescope-ingestor -config /app/config.json
 fi
 

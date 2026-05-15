@@ -1,0 +1,8 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+export DB_PATH="/app/data/meshcore.db"
+
+bashio::log.info "Starting CoreScope web server on port 80."
+bashio::log.info "CoreScope web server database path is /app/data/meshcore.db -> /config/corescope/data/meshcore.db."
+exec /app/corescope-server -config-dir /app -db /app/data/meshcore.db -public /app/public -port 80

@@ -10,7 +10,7 @@ The final runtime image uses the Home Assistant add-on base image directly:
 FROM ghcr.io/home-assistant/base:latest
 ```
 
-This keeps the image compatible with Home Assistant Supervisor while still using CoreScope's upstream Go server, Go ingestor, static web UI, and optional Mosquitto/Caddy runtime components.
+This keeps the image compatible with Home Assistant Supervisor while still using CoreScope's upstream Go server, Go ingestor, static web UI, and optional Mosquitto packet relay.
 
 ## Configuration Options
 
@@ -36,7 +36,7 @@ List of external MQTT brokers for CoreScope to ingest. Each source supports:
 - `reject_unauthorized`
 - `connect_timeout_sec`
 
-Passwords are written only into `/config/config.json` inside the add-on config mount. They are not logged by the add-on wrapper.
+Passwords are written only into `/config/corescope/config.json` inside the add-on config mount. They are not logged by the add-on wrapper.
 
 ### `config_json`
 
@@ -46,9 +46,21 @@ Optional full CoreScope `config.json` object as a JSON string. When this is set,
 
 Default IATA-style region code used in generated config.
 
+### `log_level`
+
+Reserved add-on option for CoreScope logging level. The current upstream CoreScope server does not expose a CLI flag or environment variable for log level control, and the ingestor currently only parses `logLevel` without applying it. This add-on does not fake support by passing an ineffective setting through.
+
+### `mosquitto_log_level`
+
+Controls generated Mosquitto `log_type` entries. The default is `warning`, which logs warnings and errors only.
+
+### `debug_startup`
+
+When enabled, logs redacted startup diagnostics, including generated paths, MQTT topics, binary locations, and directory permissions. Passwords and API keys are not logged.
+
 ### `disable_caddy`
 
-Defaults to `true`. When enabled, CoreScope serves HTTP directly on port `80`. When set to `false`, the add-on starts CoreScope on port `3000` and starts Caddy as a local HTTP reverse proxy on port `80`.
+Defaults to `true`. Caddy is not started in the current s6 service layout; CoreScope serves HTTP directly on port `80`.
 
 HTTPS/Caddy certificate management is not configured in this first add-on version because Home Assistant Ingress and the Home Assistant frontend normally handle TLS.
 
@@ -64,10 +76,12 @@ If a future CoreScope release adds absolute URL assumptions that do not work beh
 
 ## Persistent Paths
 
-- `/config/config.json`: generated or user-supplied CoreScope config.
-- `/config/data`: persistent CoreScope data, linked to `/app/data`.
-- `/config/mosquitto`: persistent Mosquitto broker state when the internal broker is enabled.
-- `/config/caddy`: generated Caddyfile when Caddy proxy mode is enabled.
+- `/config/corescope/config.json`: generated or user-supplied CoreScope config.
+- `/config/corescope/data`: persistent CoreScope data, linked to `/app/data`.
+- `/config/corescope/data/meshcore.db`: SQLite database path.
+- `/config/corescope/data/meshcore.db-wal`: SQLite WAL file.
+- `/config/corescope/data/meshcore.db-shm`: SQLite shared-memory file.
+- `/config/mosquitto`: generated Mosquitto config. Mosquitto persistence is disabled because the broker is only a packet relay for CoreScope.
 
 ## Building And Publishing
 

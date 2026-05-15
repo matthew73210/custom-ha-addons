@@ -23,13 +23,15 @@ The web UI is available through Home Assistant Ingress and through the configure
 
 ## Persistence
 
-CoreScope stores persistent data under `/app/data`. This add-on links `/app/data` to the add-on config mount at `/config/data`, so the SQLite database and runtime data survive add-on restarts and updates.
+CoreScope stores persistent data under `/app/data`. This add-on links `/app/data` to the add-on config mount at `/config/corescope/data`, so the SQLite database, WAL, and shared-memory files survive add-on restarts and updates.
 
-The generated CoreScope config is stored at `/config/config.json`. If you provide a full `config_json` option, the add-on writes that JSON object to the same file.
+The generated CoreScope config is stored at `/config/corescope/config.json`. If you provide a full `config_json` option, the add-on writes that JSON object to the same file while keeping the database path inside `/app/data`.
 
 ## MQTT
 
 By default, the add-on starts a local Mosquitto listener on port `1883` inside the container and configures CoreScope to read `meshcore/#` from it.
+
+Mosquitto persistence is disabled because the broker is used only as a packet relay for CoreScope.
 
 To ingest from external MQTT brokers, add entries to `external_mqtt_sources`. Credentials belong in add-on options or in a custom `config_json`; do not commit them to this repository.
 
