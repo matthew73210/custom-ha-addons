@@ -28,6 +28,7 @@ options:
   mqtt_port: 1883
   external_mqtt_sources: []
   config_json: ""
+  map_region: "PAR"
   default_region: "SJC"
   log_level: "info"
   mosquitto_log_level: "warning"
@@ -50,6 +51,7 @@ schema:
       reject_unauthorized: bool?
       connect_timeout_sec: int(1,300)?
   config_json: str?
+  map_region: str
   default_region: str
   log_level: list(trace|debug|info|warn|error)
   mosquitto_log_level: list(error|warning|notice|information|debug)

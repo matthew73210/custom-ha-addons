@@ -19,7 +19,7 @@ CoreScope is developed by Kpa-clawbot and contributors: https://github.com/Kpa-c
 4. Review the add-on options.
 5. Start the add-on.
 
-The web UI is available through Home Assistant Ingress and through the configured web UI port.
+The web UI is available through Home Assistant Ingress and through the configured mapped `80/tcp` web UI port.
 
 ## Persistence
 
@@ -36,6 +36,10 @@ Mosquitto persistence is disabled because the broker is used only as a packet re
 To ingest from external MQTT brokers, add entries to `external_mqtt_sources`. Credentials belong in add-on options or in a custom `config_json`; do not commit them to this repository.
 
 The host port for `1883/tcp` is disabled by default. Expose it in the add-on Network settings only when another device or service needs to publish packets to this add-on.
+
+## Map Region
+
+Use `map_region` to set the initial map region. `default_region` remains as a backward-compatible alias, but `map_region` is canonical when both are present.
 
 ## License And Attribution
 

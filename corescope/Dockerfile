@@ -65,6 +65,8 @@ COPY --from=builder /src/channel-rainbow.json /app/channel-rainbow.json
 COPY --from=builder /src/LICENSE /usr/share/licenses/corescope/LICENSE
 COPY rootfs /
 
+RUN sed -i 's#<script src="vendor/qrcode.js"></script>#<script src="ha-ingress.js?v=__BUST__"></script>\n  <script src="vendor/qrcode.js"></script>#' /app/public/index.html
+
 RUN chmod a+x /etc/services.d/corescope-server/run \
     /etc/services.d/corescope-server/finish \
     /etc/services.d/corescope-ingestor/run \

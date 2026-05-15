@@ -42,9 +42,17 @@ Passwords are written only into `/config/corescope/config.json` inside the add-o
 
 Optional full CoreScope `config.json` object as a JSON string. When this is set, it takes precedence over generated config. Use this for advanced CoreScope settings such as channel keys, region maps, geo filters, custom retention, or external MQTT credentials.
 
+The add-on always keeps `dbPath` under `/app/data/meshcore.db`, which is linked to persistent storage.
+
+### `map_region`
+
+Canonical add-on option for the initial UI map region. The default is `PAR`. The generated CoreScope config uses this value for `defaultRegion`, the generated region list, and `mapDefaults` when the add-on knows coordinates for the region.
+
+Known built-in map centers include `PAR`, `CDG`, `SJC`, `SFO`, and `OAK`. If the region has no built-in center, CoreScope falls back to its upstream map default while still learning observer regions from MQTT topics such as `meshcore/PAR/.../packets`.
+
 ### `default_region`
 
-Default IATA-style region code used in generated config.
+Backward-compatible option retained for the local MQTT source fallback region. MQTT behavior is otherwise unchanged. If `map_region` is omitted in a future config, `default_region` can still be used as the map fallback, but `map_region` is the canonical map option.
 
 ### `log_level`
 
@@ -70,9 +78,16 @@ Disables the internal Mosquitto listener. Use this when all packet ingestion com
 
 ## Ingress
 
-Ingress is enabled on port `80`. CoreScope uses hash-based frontend routes and API paths, so it should be usable through Home Assistant Ingress. WebSocket support is requested with `ingress_stream: true`.
+Ingress is enabled on port `80`. Direct access also works through the mapped `80/tcp` host port.
 
-If a future CoreScope release adds absolute URL assumptions that do not work behind Home Assistant's Ingress proxy, use the regular web UI port from the add-on Network settings and report the limitation here.
+CoreScope upstream uses absolute frontend API paths such as `/api/...` and root WebSocket connections. The add-on injects `ha-ingress.js` before CoreScope's frontend scripts. That helper derives the current browser base path:
+
+- Direct access: `/`
+- Home Assistant Ingress: `/api/hassio_ingress/<redacted>/`
+
+It rewrites CoreScope API fetches to `<browser-base>/api/...` and rewrites root WebSocket connections to the same browser base path with `ws:` or `wss:`. CoreScope's backend already upgrades WebSocket requests at any static path, so no ingress token or hardcoded external path is needed.
+
+MQTT port mapping remains separate from Ingress. Only expose `1883/tcp` when an external MQTT publisher needs to reach the add-on broker directly.
 
 ## Persistent Paths
 

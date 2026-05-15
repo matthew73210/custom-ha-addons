@@ -23,18 +23,43 @@ ln -sfn "${DATA_DIR}" /app/data
 chmod -R u+rwX,g+rwX "${CONFIG_ROOT}" "${DATA_DIR}" "${RUN_DIR}"
 
 log_level="$(jq -r '.log_level // "info"' "${OPTIONS_PATH}")"
+MAP_REGION="$(jq -r '(.map_region // .default_region // "PAR") | ascii_upcase' "${OPTIONS_PATH}")"
+MQTT_REGION="$(jq -r '(.default_region // "SJC") | ascii_upcase' "${OPTIONS_PATH}")"
+MAP_CENTER_JSON="null"
+case "${MAP_REGION}" in
+  PAR) MAP_CENTER_JSON='[48.8566,2.3522]' ;;
+  CDG) MAP_CENTER_JSON='[49.0097,2.5479]' ;;
+  SJC) MAP_CENTER_JSON='[37.3626,-121.929]' ;;
+  SFO) MAP_CENTER_JSON='[37.6213,-122.379]' ;;
+  OAK) MAP_CENTER_JSON='[37.7213,-122.2208]' ;;
+esac
+MAP_ZOOM="9"
 
 if [ -f "${OPTIONS_PATH}" ] && jq -e '.config_json? // "" | length > 0' "${OPTIONS_PATH}" >/dev/null; then
-  jq -er --arg db_path "/app/data/meshcore.db" '
+  jq -er \
+    --arg db_path "/app/data/meshcore.db" \
+    --arg map_region "${MAP_REGION}" \
+    --arg mqtt_region "${MQTT_REGION}" \
+    --argjson map_center "${MAP_CENTER_JSON}" \
+    --argjson map_zoom "${MAP_ZOOM}" '
     .config_json
     | fromjson
     | if type == "object" then . else error("config_json must be a JSON object") end
     | .dbPath = $db_path
+    | .regions = ((.regions // {}) + {($map_region): $map_region, ($mqtt_region): $mqtt_region})
+    | if $map_center == null then .
+      else .mapDefaults = ((.mapDefaults // {}) + {center: $map_center, zoom: ((.mapDefaults.zoom // $map_zoom))})
+      end
   ' "${OPTIONS_PATH}" > "${CONFIG_PATH}.tmp"
   mv "${CONFIG_PATH}.tmp" "${CONFIG_PATH}"
   bashio::log.info "Using custom CoreScope config JSON from add-on options."
 else
-  jq -n --slurpfile options "${OPTIONS_PATH}" '
+  jq -n \
+    --slurpfile options "${OPTIONS_PATH}" \
+    --arg map_region "${MAP_REGION}" \
+    --arg mqtt_region "${MQTT_REGION}" \
+    --argjson map_center "${MAP_CENTER_JSON}" \
+    --argjson map_zoom "${MAP_ZOOM}" '
     def prune:
       with_entries(select(.value != null and .value != "" and .value != []));
     def normalize_source:
@@ -44,7 +69,7 @@ else
       | if has("connect_timeout_sec") then .connectTimeoutSec = .connect_timeout_sec | del(.connect_timeout_sec) else . end;
 
     ($options[0] // {}) as $opt
-    | ($opt.default_region // "SJC") as $region
+    | $map_region as $region
     | ($opt.mqtt_port // 1883) as $mqtt_port
     | (
         [
@@ -53,7 +78,7 @@ else
               name: "home-assistant-addon",
               broker: ("mqtt://localhost:" + ($mqtt_port | tostring)),
               topics: ["meshcore/#"],
-              region: $region
+              region: $mqtt_region
             }
           else empty end
         ]
@@ -62,8 +87,9 @@ else
     | {
         dbPath: "/app/data/meshcore.db",
         defaultRegion: $region,
-        regions: {($region): $region},
+        regions: {($region): $region, ($mqtt_region): $mqtt_region},
         mqttSources: $sources,
+        mapDefaults: (if $map_center == null then {} else {center: $map_center, zoom: $map_zoom} end),
         branding: {
           siteName: "CoreScope",
           tagline: "Real-time MeshCore packet analyzer"
@@ -138,6 +164,12 @@ if id mosquitto >/dev/null 2>&1; then
   chmod -R u+rwX,g+rwX "${MOSQUITTO_DIR}"
 fi
 
+bashio::log.info "Ingress support is enabled in add-on metadata; frontend API and WebSocket URLs are derived from the browser base path."
+bashio::log.info "Frontend public base path is browser-derived (direct /, ingress /api/hassio_ingress/<redacted>/)."
+bashio::log.info "Frontend API path template: <browser-base>/api/..."
+bashio::log.info "Frontend WebSocket endpoint: <browser-base> with HTTP Upgrade."
+bashio::log.info "Map region: ${MAP_REGION}; map center: ${MAP_CENTER_JSON}; MQTT fallback region: ${MQTT_REGION}."
+
 if [ "$(jq -r '.debug_startup // false' "${OPTIONS_PATH}")" = "true" ]; then
   bashio::log.info "[startup] Generated config path: ${CONFIG_PATH}"
   bashio::log.info "[startup] CoreScope data path: ${DATA_DIR}"
@@ -148,6 +180,12 @@ if [ "$(jq -r '.debug_startup // false' "${OPTIONS_PATH}")" = "true" ]; then
     bashio::log.warning "[startup] /app/data is not a symlink"
   fi
   bashio::log.info "[startup] MQTT listener address: 0.0.0.0:${MQTT_PORT}"
+  bashio::log.info "[startup] Ingress mode configured: true"
+  bashio::log.info "[startup] Frontend browser base path: derived at runtime"
+  bashio::log.info "[startup] Frontend API base path: window.CoreScopeIngress.apiBasePath"
+  bashio::log.info "[startup] Frontend WebSocket path: window.CoreScopeIngress.websocketPath"
+  bashio::log.info "[startup] Map region: ${MAP_REGION}"
+  bashio::log.info "[startup] MQTT fallback/default_region: ${MQTT_REGION}"
   bashio::log.info "[startup] Local Mosquitto enabled: $(jq -r '((.mqtt_enabled // true) and ((.disable_mosquitto // false) | not))' "${OPTIONS_PATH}")"
   bashio::log.info "[startup] External MQTT source count: $(jq -r '(.external_mqtt_sources // []) | length' "${OPTIONS_PATH}")"
   bashio::log.info "[startup] MQTT subscribed topics: $(jq -r '[.mqttSources[]?.topics[]?] | unique | join(", ")' "${CONFIG_PATH}")"
