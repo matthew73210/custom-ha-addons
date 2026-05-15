@@ -1,0 +1,17 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+CONFIG_PATH="/config/config.json"
+
+mqtt_sources="$(jq -r '(.mqttSources // []) | length' "${CONFIG_PATH}")"
+
+export DB_PATH="/app/data/meshcore.db"
+export CORESCOPE_INGESTOR_STATS="/config/run/ingestor-stats.json"
+
+if [ "${mqtt_sources}" -gt 0 ]; then
+  bashio::log.info "Starting CoreScope MQTT ingestor with ${mqtt_sources} configured source(s)."
+  exec /app/corescope-ingestor -config /app/config.json
+fi
+
+bashio::log.warning "No MQTT sources configured; CoreScope ingestor is idle."
+exec sleep 2147483647

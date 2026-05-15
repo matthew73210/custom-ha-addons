@@ -65,7 +65,11 @@ COPY --from=builder /src/channel-rainbow.json /app/channel-rainbow.json
 COPY --from=builder /src/LICENSE /usr/share/licenses/corescope/LICENSE
 COPY rootfs /
 
-RUN chmod a+x /etc/services.d/corescope/run /etc/cont-init.d/corescope.sh \
+RUN chmod a+x /etc/services.d/corescope/run \
+    /etc/services.d/corescope-caddy/run \
+    /etc/services.d/corescope-ingestor/run \
+    /etc/services.d/corescope-mosquitto/run \
+    /etc/cont-init.d/corescope.sh \
   && mkdir -p /app/data /config/data /config/mosquitto /config/caddy /config/run
 
 EXPOSE 80 1883
