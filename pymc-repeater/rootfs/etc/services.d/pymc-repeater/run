@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
+
+bashio::log.info "Starting pyMC Repeater dashboard on port 8000."
+exec python3 -m repeater.main --config /etc/pymc_repeater/config.yaml --log-level "${LOG_LEVEL}"
