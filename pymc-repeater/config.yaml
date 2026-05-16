@@ -1,4 +1,4 @@
-name: "pyMC Repeater Dev"
+name: "pyMC Repeater"
 slug: "pymc-repeater"
 description: "Python MeshCore repeater daemon for Home Assistant"
 version: "0.2.3"
