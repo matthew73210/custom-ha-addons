@@ -322,8 +322,9 @@ gpiochip = (
 
 if radio_type == "sx1262" and gpiochip == "/dev/gpiochip0" and not os.path.exists(gpiochip):
     print(
-        "Configured radio_type=sx1262 requires /dev/gpiochip0, but this device is not available "
-        "in the Home Assistant add-on container. Use KISS/serial config or expose the GPIO device."
+        "Configured radio_type=sx1262 requires /dev/gpiochip0, but /dev/gpiochip0 is not "
+        "available in this Home Assistant add-on container. Use KISS/serial config or expose "
+        "the GPIO device."
     )
     sys.exit(1)
 

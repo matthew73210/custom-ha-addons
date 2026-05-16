@@ -17,11 +17,9 @@ fi
 if [ "${container_exit_code}" = "0" ]; then
   bashio::log.info "Stopping add-on because pyMC Repeater is no longer running."
 else
-  bashio::log.fatal "Stopping add-on because required pyMC Repeater service failed."
+  bashio::log.fatal "pyMC Repeater exited fatally; stopping add-on"
 fi
 
-if [ -x /run/s6/basedir/bin/halt ]; then
-  exec /run/s6/basedir/bin/halt
-fi
-
-exec s6-svscanctl -t /run/service
+s6-svc -d /run/service/pymc-repeater-ingress 2>/dev/null || true
+s6-svscanctl -t /run/service 2>/dev/null || true
+exit 0

@@ -9,6 +9,8 @@ INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
 LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
 
+s6-svc -O /run/service/pymc-repeater 2>/dev/null || true
+
 log_redacted_config() {
   bashio::log.info "Final generated ${CONFIG_PATH} (secrets redacted):"
   python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
@@ -59,6 +61,12 @@ log_listeners() {
     netstat -ltnp 2>&1 | while IFS= read -r line; do bashio::log.info "netstat | ${line}"; done
   else
     bashio::log.warning "Neither ss nor netstat is available for listener diagnostics."
+  fi
+}
+
+notify_ready() {
+  if [ -e "/proc/$$/fd/3" ]; then
+    printf '\n' >&3
   fi
 }
 
@@ -149,7 +157,7 @@ wait_for_probe() {
       local status=$?
       set -e
       bashio::log.fatal "pyMC Repeater exited before startup completed with status ${status}."
-      exit "${status}"
+      halt_addon "${status}"
     fi
 
     if output="$("${command_name}" "$@" 2>&1)"; then
@@ -162,13 +170,30 @@ wait_for_probe() {
   bashio::log.fatal "Timed out waiting for ${label}: ${output}"
   kill -TERM "${BACKEND_PID}" 2>/dev/null || true
   wait "${BACKEND_PID}" 2>/dev/null || true
-  exit 1
+  halt_addon 1
 }
 
 stop_backend() {
   bashio::log.info "Stopping pyMC Repeater backend."
   kill -TERM "${BACKEND_PID}" 2>/dev/null || true
   wait "${BACKEND_PID}" 2>/dev/null || true
+}
+
+halt_addon() {
+  local status="$1"
+
+  if [ -w /run/s6-linux-init-container-results/exitcode ]; then
+    printf '%s' "${status}" > /run/s6-linux-init-container-results/exitcode
+  fi
+
+  if [ "${status}" = "0" ]; then
+    bashio::log.info "Stopping add-on because pyMC Repeater is no longer running."
+  else
+    bashio::log.fatal "pyMC Repeater exited fatally; stopping add-on"
+  fi
+
+  s6-svc -d /run/service/pymc-repeater-ingress 2>/dev/null || true
+  exit "${status}"
 }
 
 bashio::log.info "Selected backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
@@ -178,7 +203,7 @@ log_redacted_config
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
 python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
 BACKEND_PID="$!"
-trap stop_backend INT TERM
+trap 'stop_backend; exit 0' INT TERM
 
 wait_for_probe "Backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
 wait_for_probe "Backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
@@ -189,6 +214,7 @@ wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}
 bashio::log.info "Ingress entrypoint is accepting HTTP"
 log_listeners
 bashio::log.info "Add-on startup complete"
+notify_ready
 
 set +e
 wait "${BACKEND_PID}"
@@ -201,4 +227,4 @@ else
   bashio::log.fatal "pyMC Repeater backend exited with status ${BACKEND_STATUS}."
 fi
 
-exit "${BACKEND_STATUS}"
+halt_addon "${BACKEND_STATUS}"

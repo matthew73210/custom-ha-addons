@@ -1,0 +1,75 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+INGRESS_HOST="127.0.0.1"
+INGRESS_PORT="8080"
+READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
+
+notify_ready() {
+  if [ -e "/proc/$$/fd/3" ]; then
+    printf '\n' >&3
+  fi
+}
+
+http_probe() {
+  python3 - "$1" <<'PY'
+import sys
+import urllib.error
+import urllib.request
+
+url = sys.argv[1]
+request = urllib.request.Request(url, method="GET")
+try:
+    with urllib.request.urlopen(request, timeout=2) as response:
+        status = response.getcode()
+except urllib.error.HTTPError as exc:
+    status = exc.code
+except Exception as exc:
+    print(exc)
+    sys.exit(1)
+
+if status < 500:
+    print(f"HTTP {status}")
+else:
+    print(f"HTTP {status}")
+    sys.exit(1)
+PY
+}
+
+stop_nginx() {
+  bashio::log.info "Stopping pyMC Repeater ingress proxy."
+  kill -TERM "${NGINX_PID}" 2>/dev/null || true
+  wait "${NGINX_PID}" 2>/dev/null || true
+}
+
+bashio::log.info "Starting pyMC Repeater ingress proxy on port ${INGRESS_PORT}."
+nginx -g "daemon off;" &
+NGINX_PID="$!"
+trap stop_nginx INT TERM
+
+deadline=$((SECONDS + READY_TIMEOUT))
+probe_output=""
+while [ "${SECONDS}" -lt "${deadline}" ]; do
+  if ! kill -0 "${NGINX_PID}" 2>/dev/null; then
+    set +e
+    wait "${NGINX_PID}"
+    status=$?
+    set -e
+    bashio::log.fatal "Ingress proxy exited before readiness with status ${status}."
+    exit "${status}"
+  fi
+
+  if probe_output="$(http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/ha-ingress-proxy.js" 2>&1)"; then
+    bashio::log.info "Ingress proxy is accepting HTTP: ${probe_output}"
+    notify_ready
+    wait "${NGINX_PID}"
+    exit "$?"
+  fi
+
+  sleep 1
+done
+
+bashio::log.fatal "Timed out waiting for ingress proxy HTTP readiness: ${probe_output}"
+kill -TERM "${NGINX_PID}" 2>/dev/null || true
+wait "${NGINX_PID}" 2>/dev/null || true
+exit 1

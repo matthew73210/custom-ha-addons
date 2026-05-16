@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.3
+ARG BUILD_VERSION=0.2.4
 ARG BUILD_ARCH=amd64
 ARG PYMC_REPEATER_REF=main
 ARG PYMC_CONSOLE_REF=main
@@ -66,10 +66,10 @@ COPY rootfs /
 
 RUN chmod a+x \
     /etc/cont-init.d/pymc-repeater.sh \
-    /etc/services.d/pymc-repeater-ingress/run \
-    /etc/services.d/pymc-repeater-ingress/finish \
-    /etc/services.d/pymc-repeater/run \
-    /etc/services.d/pymc-repeater/finish \
+    /etc/s6-overlay/s6-rc.d/pymc-repeater-ingress/run \
+    /etc/s6-overlay/s6-rc.d/pymc-repeater-ingress/finish \
+    /etc/s6-overlay/s6-rc.d/pymc-repeater/run \
+    /etc/s6-overlay/s6-rc.d/pymc-repeater/finish \
   && mkdir -p /config/pymc-repeater /data/pymc-repeater /run/nginx
 
 EXPOSE 8080
