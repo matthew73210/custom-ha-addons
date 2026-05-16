@@ -21,6 +21,7 @@ Home Assistant Supervisor reads the repository metadata at the root of this repo
 - `placeholder-addon`: a non-production placeholder used only to validate and demonstrate the repository structure.
 - `corescope`: CoreScope packaged as a Home Assistant Supervisor add-on for MeshCore packet analysis.
 - `pymc-repeater`: pyMC Repeater packaged as a Home Assistant Supervisor add-on for MeshCore repeater deployments.
+- `pymc-repeater-console`: pyMC Repeater packaged with the pyMC Console dashboard as the default UI.
 
 Remove or replace the placeholder before publishing a real add-on for users.
 
