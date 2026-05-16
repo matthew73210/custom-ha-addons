@@ -28,6 +28,7 @@ RUN apt-get update \
     build-essential \
     ca-certificates \
     git \
+    iproute2 \
     jq \
     libffi-dev \
     libusb-1.0-0 \

@@ -1,7 +1,204 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
+CONFIG_PATH="/etc/pymc_repeater/config.yaml"
+BACKEND_HOST="127.0.0.1"
+BACKEND_PORT="8000"
+INGRESS_HOST="127.0.0.1"
+INGRESS_PORT="8080"
+READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
 LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
 
-bashio::log.info "Starting pyMC Repeater dashboard on port 8000."
-exec python3 -m repeater.main --config /etc/pymc_repeater/config.yaml --log-level "${LOG_LEVEL}"
+log_redacted_config() {
+  bashio::log.info "Final generated ${CONFIG_PATH} (secrets redacted):"
+  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
+import pathlib
+
+import yaml
+
+SENSITIVE_KEYS = {
+    "admin_password",
+    "api_key",
+    "api_token",
+    "guest_password",
+    "identity_key",
+    "jwt_secret",
+    "password",
+    "private_key",
+    "token",
+}
+
+
+def redact(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            if str(key).lower() in SENSITIVE_KEYS:
+                redacted[key] = "<redacted>"
+            else:
+                redacted[key] = redact(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact(item) for item in value]
+    return value
+
+
+config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+with config_path.open("r", encoding="utf-8") as handle:
+    config = yaml.safe_load(handle) or {}
+
+print(yaml.safe_dump(redact(config), default_flow_style=False, sort_keys=False).rstrip())
+PY
+}
+
+log_listeners() {
+  bashio::log.info "Listening TCP sockets:"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp 2>&1 | while IFS= read -r line; do bashio::log.info "ss | ${line}"; done
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltnp 2>&1 | while IFS= read -r line; do bashio::log.info "netstat | ${line}"; done
+  else
+    bashio::log.warning "Neither ss nor netstat is available for listener diagnostics."
+  fi
+}
+
+http_probe() {
+  python3 - "$1" <<'PY'
+import sys
+import urllib.error
+import urllib.request
+
+url = sys.argv[1]
+request = urllib.request.Request(url, method="GET")
+try:
+    with urllib.request.urlopen(request, timeout=2) as response:
+        status = response.getcode()
+except urllib.error.HTTPError as exc:
+    status = exc.code
+except Exception as exc:
+    print(exc)
+    sys.exit(1)
+
+if status < 500:
+    print(f"HTTP {status}")
+else:
+    print(f"HTTP {status}")
+    sys.exit(1)
+PY
+}
+
+websocket_probe() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import base64
+import os
+import socket
+import sys
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+path = sys.argv[3]
+key = base64.b64encode(os.urandom(16)).decode("ascii")
+request = (
+    f"GET {path} HTTP/1.1\r\n"
+    f"Host: {host}:{port}\r\n"
+    "Connection: Upgrade\r\n"
+    "Upgrade: websocket\r\n"
+    "Sec-WebSocket-Version: 13\r\n"
+    f"Sec-WebSocket-Key: {key}\r\n"
+    "\r\n"
+)
+
+try:
+    with socket.create_connection((host, port), timeout=2) as sock:
+        sock.sendall(request.encode("ascii"))
+        response = sock.recv(256).decode("latin1", errors="replace")
+except Exception as exc:
+    print(exc)
+    sys.exit(1)
+
+status_line = response.splitlines()[0] if response else ""
+if not status_line.startswith("HTTP/"):
+    print(status_line or "empty response")
+    sys.exit(1)
+
+try:
+    status = int(status_line.split()[1])
+except Exception:
+    print(status_line)
+    sys.exit(1)
+
+if status < 500:
+    print(status_line)
+else:
+    print(status_line)
+    sys.exit(1)
+PY
+}
+
+wait_for_probe() {
+  local label="$1"
+  local command_name="$2"
+  local deadline=$((SECONDS + READY_TIMEOUT))
+  local output=""
+
+  shift 2
+  while [ "${SECONDS}" -lt "${deadline}" ]; do
+    if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
+      set +e
+      wait "${BACKEND_PID}"
+      local status=$?
+      set -e
+      bashio::log.fatal "pyMC Repeater exited before startup completed with status ${status}."
+      exit "${status}"
+    fi
+
+    if output="$("${command_name}" "$@" 2>&1)"; then
+      bashio::log.info "${label}: ${output}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  bashio::log.fatal "Timed out waiting for ${label}: ${output}"
+  kill -TERM "${BACKEND_PID}" 2>/dev/null || true
+  wait "${BACKEND_PID}" 2>/dev/null || true
+  exit 1
+}
+
+stop_backend() {
+  bashio::log.info "Stopping pyMC Repeater backend."
+  kill -TERM "${BACKEND_PID}" 2>/dev/null || true
+  wait "${BACKEND_PID}" 2>/dev/null || true
+}
+
+bashio::log.info "Selected backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
+bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
+log_redacted_config
+
+bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
+python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
+BACKEND_PID="$!"
+trap stop_backend INT TERM
+
+wait_for_probe "Backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
+wait_for_probe "Backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
+wait_for_probe "Backend WebSocket" websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/packets?token=readiness"
+bashio::log.info "pyMC Repeater backend is accepting HTTP"
+
+wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"
+bashio::log.info "Ingress entrypoint is accepting HTTP"
+log_listeners
+bashio::log.info "Add-on startup complete"
+
+set +e
+wait "${BACKEND_PID}"
+BACKEND_STATUS="$?"
+set -e
+
+if [ "${BACKEND_STATUS}" -eq 0 ]; then
+  bashio::log.info "pyMC Repeater backend exited with status 0."
+else
+  bashio::log.fatal "pyMC Repeater backend exited with status ${BACKEND_STATUS}."
+fi
+
+exit "${BACKEND_STATUS}"

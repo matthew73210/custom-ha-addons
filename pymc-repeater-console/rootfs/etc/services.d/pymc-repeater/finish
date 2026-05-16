@@ -1,4 +1,27 @@
 #!/usr/bin/with-contenv bashio
+set -euo pipefail
+
 exit_code="${1:-unknown}"
 term_signal="${2:-none}"
 bashio::log.info "pyMC Repeater service stopped. exit_code=${exit_code} signal=${term_signal}"
+
+container_exit_code=1
+if [ "${exit_code}" = "0" ] || [ "${term_signal}" = "15" ] || [ "${term_signal}" = "2" ]; then
+  container_exit_code=0
+fi
+
+if [ -w /run/s6-linux-init-container-results/exitcode ]; then
+  printf '%s' "${container_exit_code}" > /run/s6-linux-init-container-results/exitcode
+fi
+
+if [ "${container_exit_code}" = "0" ]; then
+  bashio::log.info "Stopping add-on because pyMC Repeater is no longer running."
+else
+  bashio::log.fatal "Stopping add-on because required pyMC Repeater service failed."
+fi
+
+if [ -x /run/s6/basedir/bin/halt ]; then
+  exec /run/s6/basedir/bin/halt
+fi
+
+exec s6-svscanctl -t /run/service

@@ -295,3 +295,43 @@ chmod -R u+rwX,g+rwX "${CONFIG_ROOT}" "${DATA_ROOT}"
 
 bashio::log.info "${CONFIG_ACTION}: /etc/pymc_repeater/config.yaml -> ${CONFIG_PATH}."
 bashio::log.info "Persistent pyMC Repeater data path is /var/lib/pymc_repeater -> ${DATA_ROOT}."
+
+PREFLIGHT_RESULT="$(python3 - <<'PY'
+import os
+import pathlib
+import sys
+
+import yaml
+
+config_path = pathlib.Path("/config/pymc-repeater/config.yaml")
+with config_path.open("r", encoding="utf-8") as handle:
+    config = yaml.safe_load(handle) or {}
+
+radio_type = str(config.get("radio_type", "")).lower()
+sx1262_config = config.get("sx1262") or {}
+if not isinstance(sx1262_config, dict):
+    sx1262_config = {}
+
+gpiochip = (
+    sx1262_config.get("gpiochip")
+    or sx1262_config.get("gpio_chip")
+    or sx1262_config.get("gpio_chip_path")
+    or sx1262_config.get("gpiochip_path")
+    or "/dev/gpiochip0"
+)
+
+if radio_type == "sx1262" and gpiochip == "/dev/gpiochip0" and not os.path.exists(gpiochip):
+    print(
+        "Configured radio_type=sx1262 requires /dev/gpiochip0, but this device is not available "
+        "in the Home Assistant add-on container. Use KISS/serial config or expose the GPIO device."
+    )
+    sys.exit(1)
+
+print("ok")
+PY
+)" || {
+  bashio::log.fatal "${PREFLIGHT_RESULT}"
+  exit 1
+}
+
+bashio::log.info "pyMC Repeater config preflight passed."
