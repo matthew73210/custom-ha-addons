@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - pymc-console
     paths:
       - ".github/workflows/build-pymc-repeater-console.yml"
       - "pymc-repeater-console/**"
