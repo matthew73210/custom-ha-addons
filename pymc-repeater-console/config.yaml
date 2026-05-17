@@ -1,7 +1,7 @@
 name: "pyMC Repeater + Console"
 slug: "pymc-repeater-console"
 description: "pyMC_Repeater with pyMC Console dashboard"
-version: "0.2.8"
+version: "0.2.9"
 stage: experimental
 url: "https://github.com/matthew73210/custom-ha-addons/tree/main/pymc-repeater-console"
 arch:

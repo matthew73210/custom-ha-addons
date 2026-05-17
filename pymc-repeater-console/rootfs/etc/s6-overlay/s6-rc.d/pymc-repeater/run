@@ -188,13 +188,6 @@ log_endpoint_diagnostics() {
   compare_endpoint_probe "/api/analytics/bucketed_stats?preset=1h"
 }
 
-log_authenticated_graph_diagnostics() {
-  bashio::log.info "Running authenticated Console graph diagnostics."
-  python3 /opt/pymc_repeater/graph_diagnostics.py | while IFS= read -r line; do
-    bashio::log.info "graph | ${line}"
-  done
-}
-
 notify_ready() {
   if [ -e "/proc/$$/fd/3" ]; then
     printf '\n' >&3
@@ -364,7 +357,6 @@ else
 fi
 log_storage_diagnostics
 log_endpoint_diagnostics
-log_authenticated_graph_diagnostics
 log_listeners
 bashio::log.info "Add-on startup complete"
 notify_ready

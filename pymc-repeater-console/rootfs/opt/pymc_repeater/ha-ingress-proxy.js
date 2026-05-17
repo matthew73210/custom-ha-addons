@@ -186,6 +186,30 @@
     window.WebSocket = PyMCIngressWebSocket;
   }
 
+  function rewriteWorkerUrl(value) {
+    if (typeof value === 'string') return rewriteUrl(value);
+    if (value instanceof URL) return new URL(rewriteUrl(value.toString()));
+    return value;
+  }
+
+  var NativeWorker = window.Worker;
+  if (NativeWorker) {
+    function PyMCIngressWorker(url, options) {
+      return new NativeWorker(rewriteWorkerUrl(url), options);
+    }
+    PyMCIngressWorker.prototype = NativeWorker.prototype;
+    window.Worker = PyMCIngressWorker;
+  }
+
+  var NativeSharedWorker = window.SharedWorker;
+  if (NativeSharedWorker) {
+    function PyMCIngressSharedWorker(url, options) {
+      return new NativeSharedWorker(rewriteWorkerUrl(url), options);
+    }
+    PyMCIngressSharedWorker.prototype = NativeSharedWorker.prototype;
+    window.SharedWorker = PyMCIngressSharedWorker;
+  }
+
   function patchUrlProperty(proto, property) {
     var descriptor = Object.getOwnPropertyDescriptor(proto, property);
     if (!descriptor || !descriptor.set || !descriptor.get) return;

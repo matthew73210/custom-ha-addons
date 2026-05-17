@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.8
+ARG BUILD_VERSION=0.2.9
 ARG BUILD_ARCH=amd64
 ARG PYMC_REPEATER_REF=main
 ARG PYMC_CONSOLE_REF=main
