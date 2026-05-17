@@ -36,7 +36,7 @@ Home Assistant pulls prebuilt images from GitHub Container Registry instead of b
 ghcr.io/matthew73210/pymc-repeater-console-{arch}
 ```
 
-The GitHub Actions workflow publishes `amd64` and `aarch64` images tagged with the add-on version, such as `0.2.11`, plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
+The GitHub Actions workflow publishes `amd64` and `aarch64` images tagged with the add-on version, such as `0.2.12`, plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
 
 ## Dashboard Access
 
@@ -53,6 +53,24 @@ The original pyMC Repeater UI is still available:
 ```
 
 Both UIs talk to the same pyMC_Repeater backend API and WebSocket endpoints. A small wrapper-owned navigation control is injected into both pages so you can move between **pyMC Console** and **pyMC Repeater**.
+
+## Companion Frame Server
+
+pyMC_Repeater listens inside the add-on container on TCP port `5000` for companion frame clients. The add-on exposes container port `5000/tcp` as an optional, configurable Home Assistant add-on port. It does not bind host port `5000` by default, so the add-on can install and start even when something else already uses host port `5000`.
+
+To allow remote companion clients, open the add-on **Network** settings and enable or set a host port for `5000/tcp`. Remote clients should connect to:
+
+```text
+<HA host IP>:<configured host port>
+```
+
+For example, if you map `5000/tcp` to host port `5000` and your Home Assistant host is `192.168.1.34`, connect clients to:
+
+```text
+192.168.1.34:5000
+```
+
+Use your Home Assistant host IP and the configured host port. Do not use Docker-internal `172.30.x.x` addresses for remote clients.
 
 ## Ingress
 
