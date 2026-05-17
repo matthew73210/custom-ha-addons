@@ -7,6 +7,13 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 - pyMC Repeater: https://github.com/pyMC-dev/pyMC_Repeater
 - pyMC Console distribution: https://github.com/dmduran12/pymc_console-dist
 
+Current upstream build refs:
+
+- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `main`
+- pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `main`
+
+The Docker build logs the resolved commit SHA for each upstream ref. The refs remain configurable with `PYMC_REPEATER_REF` and `PYMC_CONSOLE_REF` build arguments.
+
 ## Installation
 
 1. Add this add-on repository in Home Assistant:
@@ -20,6 +27,16 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 4. Review the add-on options in the Home Assistant add-on **Configuration** tab.
 5. Start the add-on.
 6. Open the dashboard with **Open Web UI**.
+
+## Prebuilt Images
+
+Home Assistant pulls prebuilt images from GitHub Container Registry instead of building locally:
+
+```text
+ghcr.io/matthew73210/pymc-repeater-console-{arch}
+```
+
+The GitHub Actions workflow publishes `amd64` and `aarch64` images tagged with the add-on version, such as `0.2.11`, plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
 
 ## Dashboard Access
 
@@ -39,15 +56,33 @@ Both UIs talk to the same pyMC_Repeater backend API and WebSocket endpoints. A s
 
 ## Ingress
 
-Ingress is enabled. Home Assistant opens the add-on through an internal Nginx proxy on port `8080`, and that proxy forwards API and WebSocket traffic to pyMC on `127.0.0.1:8000`.
+Ingress is enabled. Home Assistant opens the add-on through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream pyMC_Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
 
-The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, and WebSocket or streaming upgrade headers. The add-on does not expose host ports by default.
+The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. The add-on does not expose host ports by default.
+
+Console packet-cache and graph routes are wrapper-normalized without modifying upstream assets or backend source. The wrapper serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, and `/api/analytics/*` from the persistent SQLite data when needed, while all other API and WebSocket paths are proxied to the upstream backend.
 
 Both upstream frontends expect to run at `/`. The add-on handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
+
+### Browser Note
+
+Chrome and Chromium-based browsers are recommended for Console graph pages through Home Assistant ingress. iPhone/iOS testing currently works. Safari may still have incomplete graph rendering through HA ingress due to browser handling of worker URL rewriting under the ingress path; direct non-ingress access may work even when Safari ingress graph rendering does not.
 
 ## Configuration And Persistence
 
 Normal users should change settings in the Home Assistant add-on **Configuration** tab. Supervisor stores those settings as add-on options, and the wrapper uses them to create or update the generated pyMC config.
+
+The add-on maps Home Assistant's add-on-specific config directory into the container at:
+
+```text
+/config
+```
+
+The wrapper keeps all pyMC-owned durable files under:
+
+```text
+/config/pymc-repeater
+```
 
 The upstream daemon expects its runtime config at:
 
@@ -61,6 +96,21 @@ The persistent generated config used by this add-on lives at:
 /config/pymc-repeater/config.yaml
 ```
 
+At startup, the add-on links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility, but the generated pyMC config points directly at the persistent mapped paths:
+
+```yaml
+storage:
+  storage_dir: /config/pymc-repeater
+repeater:
+  identity_file: /config/pymc-repeater/identity.key
+```
+
+The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`, SQLite WAL files, Glass certificates, and other pyMC history/cache files. If an older install has runtime files in `/data/pymc-repeater`, the wrapper migrates them into `/config/pymc-repeater` on startup without overwriting newer persistent files.
+
+Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `log_level` is set to `debug` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
+
+Nginx logs worker asset requests and failed graph/API/WebSocket requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
+
 The wrapper sets:
 
 ```yaml
@@ -71,6 +121,10 @@ web:
 That makes pyMC_Repeater serve Console at `/`. The Docker build preserves the original pyMC_Repeater web files under `/opt/pymc_repeater_original_web`, and Nginx serves those files at `/repeater/`.
 
 All existing generated config options from the working `pymc-repeater` add-on are kept, including KISS serial settings, device permissions, storage, logging, Glass options, and ingress behavior.
+
+## AppArmor And Permissions
+
+The add-on uses Home Assistant Supervisor's default AppArmor handling with `apparmor: true`. The declared `addon_config` map grants the container read/write access to `/config`, which is where pyMC now stores its database, RRD, identity, generated config, logs/cache, and related runtime files. Serial, USB, and GPIO access remain declared in `config.yaml` for KISS and radio devices.
 
 ## KISS Example
 

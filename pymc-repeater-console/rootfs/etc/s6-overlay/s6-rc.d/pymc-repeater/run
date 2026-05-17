@@ -3,11 +3,17 @@ set -euo pipefail
 
 CONFIG_PATH="/etc/pymc_repeater/config.yaml"
 BACKEND_HOST="127.0.0.1"
-BACKEND_PORT="8000"
+BACKEND_PORT="8001"
+DIRECT_HOST="127.0.0.1"
+DIRECT_PORT="8000"
 INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
 LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
+DEBUG_LOG="false"
+if [ "${LOG_LEVEL}" = "DEBUG" ]; then
+  DEBUG_LOG="true"
+fi
 
 s6-svc -O /run/service/pymc-repeater 2>/dev/null || true
 
@@ -53,6 +59,78 @@ print(yaml.safe_dump(redact(config), default_flow_style=False, sort_keys=False).
 PY
 }
 
+log_storage_diagnostics() {
+  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
+import pathlib
+import sqlite3
+
+import yaml
+
+config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+
+try:
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+except Exception as exc:
+    print(f"unable to read config: {exc}")
+    raise SystemExit(0)
+
+storage_dir = pathlib.Path(config.get("storage", {}).get("storage_dir", "/config/pymc-repeater"))
+identity_file = pathlib.Path(config.get("repeater", {}).get("identity_file", "/config/pymc-repeater/identity.key"))
+db_path = storage_dir / "repeater.db"
+rrd_path = storage_dir / "metrics.rrd"
+
+def describe(label, path):
+    try:
+        real = path.resolve(strict=False)
+    except Exception:
+        real = path
+    if path.exists():
+        try:
+            size = path.stat().st_size
+        except Exception:
+            size = "unknown"
+        print(f"{label}: {path} -> {real} exists size={size}")
+    else:
+        print(f"{label}: {path} -> {real} missing")
+
+describe("pyMC config path", config_path)
+describe("storage_dir", storage_dir)
+describe("identity_file", identity_file)
+describe("repeater.db", db_path)
+describe("metrics.rrd", rrd_path)
+
+if db_path.exists():
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            tables = [
+                "packets",
+                "adverts",
+                "noise_floor",
+                "crc_errors",
+                "room_messages",
+                "companion_contacts",
+                "companion_messages",
+                "api_tokens",
+            ]
+            counts = []
+            for table in tables:
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                ).fetchone()
+                if exists:
+                    count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                    counts.append(f"{table}={count}")
+            if counts:
+                print("sqlite table counts: " + ", ".join(counts))
+            else:
+                print("sqlite table counts: no known pyMC tables found")
+    except Exception as exc:
+        print(f"sqlite table counts unavailable: {exc}")
+PY
+}
+
 log_listeners() {
   bashio::log.info "Listening TCP sockets:"
   if command -v ss >/dev/null 2>&1; then
@@ -62,6 +140,56 @@ log_listeners() {
   else
     bashio::log.warning "Neither ss nor netstat is available for listener diagnostics."
   fi
+}
+
+curl_probe_summary() {
+  local url="$1"
+  local output
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl unavailable"
+    return 1
+  fi
+
+  output="$(curl -sS -L --max-time 3 -o /dev/null -w '%{http_code} %{size_download} %{content_type}' "${url}" 2>&1)" || {
+    echo "${output}"
+    return 1
+  }
+  echo "${output}"
+}
+
+compare_endpoint_probe() {
+  local path="$1"
+  local direct_url="http://${DIRECT_HOST}:${DIRECT_PORT}${path}"
+  local ingress_url="http://${INGRESS_HOST}:${INGRESS_PORT}${path}"
+  local direct_output
+  local ingress_output
+
+  direct_output="$(curl_probe_summary "${direct_url}")" || direct_output="ERR ${direct_output}"
+  ingress_output="$(curl_probe_summary "${ingress_url}")" || ingress_output="ERR ${ingress_output}"
+
+  if [ "${direct_output}" = "${ingress_output}" ]; then
+    bashio::log.info "Endpoint probe ${path}: direct=${direct_output}; ingress matches"
+  else
+    bashio::log.warning "Endpoint probe ${path}: direct=${direct_output}; ingress=${ingress_output}"
+  fi
+}
+
+log_endpoint_diagnostics() {
+  bashio::log.info "Comparing direct wrapper and ingress API routes used by Console graphs/history."
+  compare_endpoint_probe "/api/stats?probe=query"
+  compare_endpoint_probe "/api/recent_packets?limit=5"
+  compare_endpoint_probe "/api/filtered_packets?limit=5"
+  compare_endpoint_probe "/api/packet_stats?hours=24"
+  compare_endpoint_probe "/api/packet_type_graph_data?hours=24&resolution=average&types=all"
+  compare_endpoint_probe "/api/metrics_graph_data?hours=24&resolution=average&metrics=rx_count,tx_count"
+  compare_endpoint_probe "/api/rrd_data?start_time=0&end_time=0&resolution=average"
+  compare_endpoint_probe "/api/noise_floor_history?hours=24"
+  compare_endpoint_probe "/api/crc_error_history?hours=24"
+  compare_endpoint_probe "/api/adverts_by_contact_type?limit=5&hours=24"
+  compare_endpoint_probe "/api/db_stats"
+  compare_endpoint_probe "/api/analytics/topology"
+  compare_endpoint_probe "/api/analytics/bucketed_stats?preset=1h"
 }
 
 notify_ready() {
@@ -95,54 +223,6 @@ else:
 PY
 }
 
-websocket_probe() {
-  python3 - "$1" "$2" "$3" <<'PY'
-import base64
-import os
-import socket
-import sys
-
-host = sys.argv[1]
-port = int(sys.argv[2])
-path = sys.argv[3]
-key = base64.b64encode(os.urandom(16)).decode("ascii")
-request = (
-    f"GET {path} HTTP/1.1\r\n"
-    f"Host: {host}:{port}\r\n"
-    "Connection: Upgrade\r\n"
-    "Upgrade: websocket\r\n"
-    "Sec-WebSocket-Version: 13\r\n"
-    f"Sec-WebSocket-Key: {key}\r\n"
-    "\r\n"
-)
-
-try:
-    with socket.create_connection((host, port), timeout=2) as sock:
-        sock.sendall(request.encode("ascii"))
-        response = sock.recv(256).decode("latin1", errors="replace")
-except Exception as exc:
-    print(exc)
-    sys.exit(1)
-
-status_line = response.splitlines()[0] if response else ""
-if not status_line.startswith("HTTP/"):
-    print(status_line or "empty response")
-    sys.exit(1)
-
-try:
-    status = int(status_line.split()[1])
-except Exception:
-    print(status_line)
-    sys.exit(1)
-
-if status < 500:
-    print(status_line)
-else:
-    print(status_line)
-    sys.exit(1)
-PY
-}
-
 wait_for_probe() {
   local label="$1"
   local command_name="$2"
@@ -156,6 +236,8 @@ wait_for_probe() {
       wait "${BACKEND_PID}"
       local status=$?
       set -e
+      log_redacted_config
+      log_storage_diagnostics
       bashio::log.fatal "pyMC Repeater exited before startup completed with status ${status}."
       halt_addon "${status}"
     fi
@@ -168,6 +250,8 @@ wait_for_probe() {
   done
 
   bashio::log.fatal "Timed out waiting for ${label}: ${output}"
+  log_redacted_config
+  log_storage_diagnostics
   kill -TERM "${BACKEND_PID}" 2>/dev/null || true
   wait "${BACKEND_PID}" 2>/dev/null || true
   halt_addon 1
@@ -196,23 +280,35 @@ halt_addon() {
   exit "${status}"
 }
 
-bashio::log.info "Selected backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
+bashio::log.info "Selected internal backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
+bashio::log.info "Selected direct wrapper entrypoint: http://${DIRECT_HOST}:${DIRECT_PORT}"
 bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
-log_redacted_config
+if [ "${DEBUG_LOG}" = "true" ]; then
+  log_redacted_config
+fi
+log_storage_diagnostics
 
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
 python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
 BACKEND_PID="$!"
 trap 'stop_backend; exit 0' INT TERM
 
-wait_for_probe "Backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
-wait_for_probe "Backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
-wait_for_probe "Backend WebSocket" websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/packets?token=readiness"
+wait_for_probe "Internal backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
+wait_for_probe "Internal backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
 bashio::log.info "pyMC Repeater backend is accepting HTTP"
+
+wait_for_probe "Direct wrapper HTTP" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/"
+wait_for_probe "Direct wrapper API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/stats"
+wait_for_probe "Direct wrapper graph compatibility API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/analytics/debug"
+bashio::log.info "Direct wrapper entrypoint is accepting HTTP"
 
 wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"
 bashio::log.info "Ingress entrypoint is accepting HTTP"
-log_listeners
+
+if [ "${DEBUG_LOG}" = "true" ]; then
+  log_endpoint_diagnostics
+  log_listeners
+fi
 bashio::log.info "Add-on startup complete"
 notify_ready
 

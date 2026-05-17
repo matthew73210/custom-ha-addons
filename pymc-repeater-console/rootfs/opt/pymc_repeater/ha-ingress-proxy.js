@@ -186,6 +186,40 @@
     window.WebSocket = PyMCIngressWebSocket;
   }
 
+  function rewriteWorkerUrl(value) {
+    if (typeof value === 'string') return rewriteUrl(value);
+    if (value instanceof URL) return rewriteUrl(value.toString());
+    return value;
+  }
+
+  var NativeWorker = window.Worker;
+  if (NativeWorker) {
+    function PyMCIngressWorker(url, options) {
+      var rewritten = rewriteWorkerUrl(url);
+      if (options !== undefined) return new NativeWorker(rewritten, options);
+      return new NativeWorker(rewritten);
+    }
+    PyMCIngressWorker.prototype = NativeWorker.prototype;
+    PyMCIngressWorker.toString = function () {
+      return NativeWorker.toString();
+    };
+    window.Worker = PyMCIngressWorker;
+  }
+
+  var NativeSharedWorker = window.SharedWorker;
+  if (NativeSharedWorker) {
+    function PyMCIngressSharedWorker(url, options) {
+      var rewritten = rewriteWorkerUrl(url);
+      if (options !== undefined) return new NativeSharedWorker(rewritten, options);
+      return new NativeSharedWorker(rewritten);
+    }
+    PyMCIngressSharedWorker.prototype = NativeSharedWorker.prototype;
+    PyMCIngressSharedWorker.toString = function () {
+      return NativeSharedWorker.toString();
+    };
+    window.SharedWorker = PyMCIngressSharedWorker;
+  }
+
   function patchUrlProperty(proto, property) {
     var descriptor = Object.getOwnPropertyDescriptor(proto, property);
     if (!descriptor || !descriptor.set || !descriptor.get) return;
