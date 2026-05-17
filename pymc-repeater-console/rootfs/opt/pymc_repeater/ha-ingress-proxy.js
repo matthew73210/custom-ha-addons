@@ -188,25 +188,35 @@
 
   function rewriteWorkerUrl(value) {
     if (typeof value === 'string') return rewriteUrl(value);
-    if (value instanceof URL) return new URL(rewriteUrl(value.toString()));
+    if (value instanceof URL) return rewriteUrl(value.toString());
     return value;
   }
 
   var NativeWorker = window.Worker;
   if (NativeWorker) {
     function PyMCIngressWorker(url, options) {
-      return new NativeWorker(rewriteWorkerUrl(url), options);
+      var rewritten = rewriteWorkerUrl(url);
+      if (options !== undefined) return new NativeWorker(rewritten, options);
+      return new NativeWorker(rewritten);
     }
     PyMCIngressWorker.prototype = NativeWorker.prototype;
+    PyMCIngressWorker.toString = function () {
+      return NativeWorker.toString();
+    };
     window.Worker = PyMCIngressWorker;
   }
 
   var NativeSharedWorker = window.SharedWorker;
   if (NativeSharedWorker) {
     function PyMCIngressSharedWorker(url, options) {
-      return new NativeSharedWorker(rewriteWorkerUrl(url), options);
+      var rewritten = rewriteWorkerUrl(url);
+      if (options !== undefined) return new NativeSharedWorker(rewritten, options);
+      return new NativeSharedWorker(rewritten);
     }
     PyMCIngressSharedWorker.prototype = NativeSharedWorker.prototype;
+    PyMCIngressSharedWorker.toString = function () {
+      return NativeSharedWorker.toString();
+    };
     window.SharedWorker = PyMCIngressSharedWorker;
   }
 

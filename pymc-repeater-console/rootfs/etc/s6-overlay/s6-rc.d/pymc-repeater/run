@@ -10,6 +10,10 @@ INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
 LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
+DEBUG_LOG="false"
+if [ "${LOG_LEVEL}" = "DEBUG" ]; then
+  DEBUG_LOG="true"
+fi
 
 s6-svc -O /run/service/pymc-repeater 2>/dev/null || true
 
@@ -219,54 +223,6 @@ else:
 PY
 }
 
-websocket_probe() {
-  python3 - "$1" "$2" "$3" <<'PY'
-import base64
-import os
-import socket
-import sys
-
-host = sys.argv[1]
-port = int(sys.argv[2])
-path = sys.argv[3]
-key = base64.b64encode(os.urandom(16)).decode("ascii")
-request = (
-    f"GET {path} HTTP/1.1\r\n"
-    f"Host: {host}:{port}\r\n"
-    "Connection: Upgrade\r\n"
-    "Upgrade: websocket\r\n"
-    "Sec-WebSocket-Version: 13\r\n"
-    f"Sec-WebSocket-Key: {key}\r\n"
-    "\r\n"
-)
-
-try:
-    with socket.create_connection((host, port), timeout=2) as sock:
-        sock.sendall(request.encode("ascii"))
-        response = sock.recv(256).decode("latin1", errors="replace")
-except Exception as exc:
-    print(exc)
-    sys.exit(1)
-
-status_line = response.splitlines()[0] if response else ""
-if not status_line.startswith("HTTP/"):
-    print(status_line or "empty response")
-    sys.exit(1)
-
-try:
-    status = int(status_line.split()[1])
-except Exception:
-    print(status_line)
-    sys.exit(1)
-
-if status < 500:
-    print(status_line)
-else:
-    print(status_line)
-    sys.exit(1)
-PY
-}
-
 wait_for_probe() {
   local label="$1"
   local command_name="$2"
@@ -280,6 +236,8 @@ wait_for_probe() {
       wait "${BACKEND_PID}"
       local status=$?
       set -e
+      log_redacted_config
+      log_storage_diagnostics
       bashio::log.fatal "pyMC Repeater exited before startup completed with status ${status}."
       halt_addon "${status}"
     fi
@@ -292,6 +250,8 @@ wait_for_probe() {
   done
 
   bashio::log.fatal "Timed out waiting for ${label}: ${output}"
+  log_redacted_config
+  log_storage_diagnostics
   kill -TERM "${BACKEND_PID}" 2>/dev/null || true
   wait "${BACKEND_PID}" 2>/dev/null || true
   halt_addon 1
@@ -323,7 +283,9 @@ halt_addon() {
 bashio::log.info "Selected internal backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
 bashio::log.info "Selected direct wrapper entrypoint: http://${DIRECT_HOST}:${DIRECT_PORT}"
 bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
-log_redacted_config
+if [ "${DEBUG_LOG}" = "true" ]; then
+  log_redacted_config
+fi
 log_storage_diagnostics
 
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
@@ -333,31 +295,20 @@ trap 'stop_backend; exit 0' INT TERM
 
 wait_for_probe "Internal backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
 wait_for_probe "Internal backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
-wait_for_probe "Internal backend WebSocket" websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/packets?token=readiness"
 bashio::log.info "pyMC Repeater backend is accepting HTTP"
 
 wait_for_probe "Direct wrapper HTTP" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/"
 wait_for_probe "Direct wrapper API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/stats"
 wait_for_probe "Direct wrapper graph compatibility API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/analytics/debug"
-wait_for_probe "Direct wrapper WebSocket" websocket_probe "${DIRECT_HOST}" "${DIRECT_PORT}" "/ws/packets?token=readiness"
 bashio::log.info "Direct wrapper entrypoint is accepting HTTP"
 
 wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"
-wait_for_probe "Ingress WebSocket" websocket_probe "${INGRESS_HOST}" "${INGRESS_PORT}" "/ws/packets?token=readiness"
 bashio::log.info "Ingress entrypoint is accepting HTTP"
-if companion_probe="$(websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/companion_frame?token=readiness" 2>&1)"; then
-  bashio::log.info "Backend companion WebSocket probe: ${companion_probe}"
-else
-  bashio::log.warning "Backend companion WebSocket probe failed: ${companion_probe}"
+
+if [ "${DEBUG_LOG}" = "true" ]; then
+  log_endpoint_diagnostics
+  log_listeners
 fi
-if companion_probe="$(websocket_probe "${INGRESS_HOST}" "${INGRESS_PORT}" "/ws/companion_frame?token=readiness" 2>&1)"; then
-  bashio::log.info "Ingress companion WebSocket probe: ${companion_probe}"
-else
-  bashio::log.warning "Ingress companion WebSocket probe failed: ${companion_probe}"
-fi
-log_storage_diagnostics
-log_endpoint_diagnostics
-log_listeners
 bashio::log.info "Add-on startup complete"
 notify_ready
 
