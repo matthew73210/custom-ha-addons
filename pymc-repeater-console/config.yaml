@@ -1,7 +1,7 @@
 name: "pyMC Repeater + Console"
 slug: "pymc-repeater-console"
 description: "pyMC_Repeater with pyMC Console dashboard"
-version: "0.2.7"
+version: "0.2.8"
 stage: experimental
 url: "https://github.com/matthew73210/custom-ha-addons/tree/main/pymc-repeater-console"
 arch:
@@ -22,7 +22,7 @@ ports:
   8000/tcp: null
   8080/tcp: null
 ports_description:
-  8000/tcp: "Internal pyMC Repeater API and dashboard port; disabled by default because ingress uses the proxy"
+  8000/tcp: "Wrapper API and dashboard port; disabled by default because ingress uses the proxy"
   8080/tcp: "Optional ingress-compatible proxy access; disabled by default"
 map:
   - type: addon_config

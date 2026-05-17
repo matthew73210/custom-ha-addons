@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+
+bashio::log.info "Starting pyMC Console compatibility API on 127.0.0.1:8090."
+exec python3 /opt/pymc_repeater/console_compat_api.py

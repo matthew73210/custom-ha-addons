@@ -157,7 +157,7 @@ def enforce_wrapper_fields(config):
 
     config.setdefault("http", {})
     config["http"]["host"] = "127.0.0.1"
-    config["http"]["port"] = 8000
+    config["http"]["port"] = 8001
 
     config.setdefault("web", {})
     config["web"]["web_path"] = "/opt/pymc_console/web/html"
@@ -482,7 +482,7 @@ def generated_config():
         },
         "http": {
             "host": "127.0.0.1",
-            "port": 8000,
+            "port": 8001,
         },
         "logging": {
             "level": option_str("log_level", "info").upper(),

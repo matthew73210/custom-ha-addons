@@ -39,9 +39,11 @@ Both UIs talk to the same pyMC_Repeater backend API and WebSocket endpoints. A s
 
 ## Ingress
 
-Ingress is enabled. Home Assistant opens the add-on through an internal Nginx proxy on port `8080`, and that proxy forwards API and WebSocket traffic to pyMC on `127.0.0.1:8000`.
+Ingress is enabled. Home Assistant opens the add-on through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream pyMC_Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
 
 The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, and WebSocket or streaming upgrade headers. The add-on does not expose host ports by default.
+
+Console packet-cache and graph routes are wrapper-normalized without modifying upstream assets or backend source. The wrapper serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, and `/api/analytics/*` from the persistent SQLite data when needed, while all other API and WebSocket paths are proxied to the upstream backend.
 
 Both upstream frontends expect to run at `/`. The add-on handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
 
@@ -84,7 +86,7 @@ repeater:
 
 The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`, SQLite WAL files, Glass certificates, and other pyMC history/cache files. If an older install has runtime files in `/data/pymc-repeater`, the wrapper migrates them into `/config/pymc-repeater` on startup without overwriting newer persistent files.
 
-The startup log prints the resolved pyMC config path, storage directory, identity file, `repeater.db`, `metrics.rrd`, selected SQLite table counts, and direct-versus-ingress route probes for the Console graph/history endpoints.
+The startup log prints the resolved pyMC config path, storage directory, identity file, `repeater.db`, `metrics.rrd`, selected SQLite table counts, unauthenticated route parity probes, authenticated JWT graph/API probes, and response summaries for Console graph/history endpoints.
 
 The wrapper sets:
 

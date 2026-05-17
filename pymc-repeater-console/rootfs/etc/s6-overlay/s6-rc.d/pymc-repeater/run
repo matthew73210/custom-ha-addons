@@ -3,7 +3,9 @@ set -euo pipefail
 
 CONFIG_PATH="/etc/pymc_repeater/config.yaml"
 BACKEND_HOST="127.0.0.1"
-BACKEND_PORT="8000"
+BACKEND_PORT="8001"
+DIRECT_HOST="127.0.0.1"
+DIRECT_PORT="8000"
 INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
@@ -154,7 +156,7 @@ curl_probe_summary() {
 
 compare_endpoint_probe() {
   local path="$1"
-  local direct_url="http://${BACKEND_HOST}:${BACKEND_PORT}${path}"
+  local direct_url="http://${DIRECT_HOST}:${DIRECT_PORT}${path}"
   local ingress_url="http://${INGRESS_HOST}:${INGRESS_PORT}${path}"
   local direct_output
   local ingress_output
@@ -163,14 +165,14 @@ compare_endpoint_probe() {
   ingress_output="$(curl_probe_summary "${ingress_url}")" || ingress_output="ERR ${ingress_output}"
 
   if [ "${direct_output}" = "${ingress_output}" ]; then
-    bashio::log.info "Endpoint probe ${path}: backend=${direct_output}; ingress matches"
+    bashio::log.info "Endpoint probe ${path}: direct=${direct_output}; ingress matches"
   else
-    bashio::log.warning "Endpoint probe ${path}: backend=${direct_output}; ingress=${ingress_output}"
+    bashio::log.warning "Endpoint probe ${path}: direct=${direct_output}; ingress=${ingress_output}"
   fi
 }
 
 log_endpoint_diagnostics() {
-  bashio::log.info "Comparing backend and ingress API routes used by Console graphs/history."
+  bashio::log.info "Comparing direct wrapper and ingress API routes used by Console graphs/history."
   compare_endpoint_probe "/api/stats?probe=query"
   compare_endpoint_probe "/api/recent_packets?limit=5"
   compare_endpoint_probe "/api/filtered_packets?limit=5"
@@ -184,6 +186,13 @@ log_endpoint_diagnostics() {
   compare_endpoint_probe "/api/db_stats"
   compare_endpoint_probe "/api/analytics/topology"
   compare_endpoint_probe "/api/analytics/bucketed_stats?preset=1h"
+}
+
+log_authenticated_graph_diagnostics() {
+  bashio::log.info "Running authenticated Console graph diagnostics."
+  python3 /opt/pymc_repeater/graph_diagnostics.py | while IFS= read -r line; do
+    bashio::log.info "graph | ${line}"
+  done
 }
 
 notify_ready() {
@@ -318,7 +327,8 @@ halt_addon() {
   exit "${status}"
 }
 
-bashio::log.info "Selected backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
+bashio::log.info "Selected internal backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
+bashio::log.info "Selected direct wrapper entrypoint: http://${DIRECT_HOST}:${DIRECT_PORT}"
 bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
 log_redacted_config
 log_storage_diagnostics
@@ -328,10 +338,16 @@ python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
 BACKEND_PID="$!"
 trap 'stop_backend; exit 0' INT TERM
 
-wait_for_probe "Backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
-wait_for_probe "Backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
-wait_for_probe "Backend WebSocket" websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/packets?token=readiness"
+wait_for_probe "Internal backend HTTP" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/"
+wait_for_probe "Internal backend API" http_probe "http://${BACKEND_HOST}:${BACKEND_PORT}/api/stats"
+wait_for_probe "Internal backend WebSocket" websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/packets?token=readiness"
 bashio::log.info "pyMC Repeater backend is accepting HTTP"
+
+wait_for_probe "Direct wrapper HTTP" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/"
+wait_for_probe "Direct wrapper API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/stats"
+wait_for_probe "Direct wrapper graph compatibility API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/analytics/debug"
+wait_for_probe "Direct wrapper WebSocket" websocket_probe "${DIRECT_HOST}" "${DIRECT_PORT}" "/ws/packets?token=readiness"
+bashio::log.info "Direct wrapper entrypoint is accepting HTTP"
 
 wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"
 wait_for_probe "Ingress WebSocket" websocket_probe "${INGRESS_HOST}" "${INGRESS_PORT}" "/ws/packets?token=readiness"
@@ -348,6 +364,7 @@ else
 fi
 log_storage_diagnostics
 log_endpoint_diagnostics
+log_authenticated_graph_diagnostics
 log_listeners
 bashio::log.info "Add-on startup complete"
 notify_ready
