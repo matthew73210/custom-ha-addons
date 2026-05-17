@@ -53,6 +53,78 @@ print(yaml.safe_dump(redact(config), default_flow_style=False, sort_keys=False).
 PY
 }
 
+log_storage_diagnostics() {
+  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
+import pathlib
+import sqlite3
+
+import yaml
+
+config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+
+try:
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+except Exception as exc:
+    print(f"unable to read config: {exc}")
+    raise SystemExit(0)
+
+storage_dir = pathlib.Path(config.get("storage", {}).get("storage_dir", "/config/pymc-repeater"))
+identity_file = pathlib.Path(config.get("repeater", {}).get("identity_file", "/config/pymc-repeater/identity.key"))
+db_path = storage_dir / "repeater.db"
+rrd_path = storage_dir / "metrics.rrd"
+
+def describe(label, path):
+    try:
+        real = path.resolve(strict=False)
+    except Exception:
+        real = path
+    if path.exists():
+        try:
+            size = path.stat().st_size
+        except Exception:
+            size = "unknown"
+        print(f"{label}: {path} -> {real} exists size={size}")
+    else:
+        print(f"{label}: {path} -> {real} missing")
+
+describe("pyMC config path", config_path)
+describe("storage_dir", storage_dir)
+describe("identity_file", identity_file)
+describe("repeater.db", db_path)
+describe("metrics.rrd", rrd_path)
+
+if db_path.exists():
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            tables = [
+                "packets",
+                "adverts",
+                "noise_floor",
+                "crc_errors",
+                "room_messages",
+                "companion_contacts",
+                "companion_messages",
+                "api_tokens",
+            ]
+            counts = []
+            for table in tables:
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                ).fetchone()
+                if exists:
+                    count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                    counts.append(f"{table}={count}")
+            if counts:
+                print("sqlite table counts: " + ", ".join(counts))
+            else:
+                print("sqlite table counts: no known pyMC tables found")
+    except Exception as exc:
+        print(f"sqlite table counts unavailable: {exc}")
+PY
+}
+
 log_listeners() {
   bashio::log.info "Listening TCP sockets:"
   if command -v ss >/dev/null 2>&1; then
@@ -62,6 +134,56 @@ log_listeners() {
   else
     bashio::log.warning "Neither ss nor netstat is available for listener diagnostics."
   fi
+}
+
+curl_probe_summary() {
+  local url="$1"
+  local output
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl unavailable"
+    return 1
+  fi
+
+  output="$(curl -sS -L --max-time 3 -o /dev/null -w '%{http_code} %{size_download} %{content_type}' "${url}" 2>&1)" || {
+    echo "${output}"
+    return 1
+  }
+  echo "${output}"
+}
+
+compare_endpoint_probe() {
+  local path="$1"
+  local direct_url="http://${BACKEND_HOST}:${BACKEND_PORT}${path}"
+  local ingress_url="http://${INGRESS_HOST}:${INGRESS_PORT}${path}"
+  local direct_output
+  local ingress_output
+
+  direct_output="$(curl_probe_summary "${direct_url}")" || direct_output="ERR ${direct_output}"
+  ingress_output="$(curl_probe_summary "${ingress_url}")" || ingress_output="ERR ${ingress_output}"
+
+  if [ "${direct_output}" = "${ingress_output}" ]; then
+    bashio::log.info "Endpoint probe ${path}: backend=${direct_output}; ingress matches"
+  else
+    bashio::log.warning "Endpoint probe ${path}: backend=${direct_output}; ingress=${ingress_output}"
+  fi
+}
+
+log_endpoint_diagnostics() {
+  bashio::log.info "Comparing backend and ingress API routes used by Console graphs/history."
+  compare_endpoint_probe "/api/stats?probe=query"
+  compare_endpoint_probe "/api/recent_packets?limit=5"
+  compare_endpoint_probe "/api/filtered_packets?limit=5"
+  compare_endpoint_probe "/api/packet_stats?hours=24"
+  compare_endpoint_probe "/api/packet_type_graph_data?hours=24&resolution=average&types=all"
+  compare_endpoint_probe "/api/metrics_graph_data?hours=24&resolution=average&metrics=rx_count,tx_count"
+  compare_endpoint_probe "/api/rrd_data?start_time=0&end_time=0&resolution=average"
+  compare_endpoint_probe "/api/noise_floor_history?hours=24"
+  compare_endpoint_probe "/api/crc_error_history?hours=24"
+  compare_endpoint_probe "/api/adverts_by_contact_type?limit=5&hours=24"
+  compare_endpoint_probe "/api/db_stats"
+  compare_endpoint_probe "/api/analytics/topology"
+  compare_endpoint_probe "/api/analytics/bucketed_stats?preset=1h"
 }
 
 notify_ready() {
@@ -199,6 +321,7 @@ halt_addon() {
 bashio::log.info "Selected backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
 bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
 log_redacted_config
+log_storage_diagnostics
 
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
 python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
@@ -211,7 +334,20 @@ wait_for_probe "Backend WebSocket" websocket_probe "${BACKEND_HOST}" "${BACKEND_
 bashio::log.info "pyMC Repeater backend is accepting HTTP"
 
 wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"
+wait_for_probe "Ingress WebSocket" websocket_probe "${INGRESS_HOST}" "${INGRESS_PORT}" "/ws/packets?token=readiness"
 bashio::log.info "Ingress entrypoint is accepting HTTP"
+if companion_probe="$(websocket_probe "${BACKEND_HOST}" "${BACKEND_PORT}" "/ws/companion_frame?token=readiness" 2>&1)"; then
+  bashio::log.info "Backend companion WebSocket probe: ${companion_probe}"
+else
+  bashio::log.warning "Backend companion WebSocket probe failed: ${companion_probe}"
+fi
+if companion_probe="$(websocket_probe "${INGRESS_HOST}" "${INGRESS_PORT}" "/ws/companion_frame?token=readiness" 2>&1)"; then
+  bashio::log.info "Ingress companion WebSocket probe: ${companion_probe}"
+else
+  bashio::log.warning "Ingress companion WebSocket probe failed: ${companion_probe}"
+fi
+log_storage_diagnostics
+log_endpoint_diagnostics
 log_listeners
 bashio::log.info "Add-on startup complete"
 notify_ready

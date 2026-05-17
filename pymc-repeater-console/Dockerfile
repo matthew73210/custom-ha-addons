@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.6
+ARG BUILD_VERSION=0.2.7
 ARG BUILD_ARCH=amd64
 ARG PYMC_REPEATER_REF=main
 ARG PYMC_CONSOLE_REF=main
@@ -27,6 +27,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
+    curl \
     git \
     iproute2 \
     jq \

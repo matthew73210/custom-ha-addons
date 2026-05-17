@@ -49,6 +49,18 @@ Both upstream frontends expect to run at `/`. The add-on handles Home Assistant 
 
 Normal users should change settings in the Home Assistant add-on **Configuration** tab. Supervisor stores those settings as add-on options, and the wrapper uses them to create or update the generated pyMC config.
 
+The add-on maps Home Assistant's add-on-specific config directory into the container at:
+
+```text
+/config
+```
+
+The wrapper keeps all pyMC-owned durable files under:
+
+```text
+/config/pymc-repeater
+```
+
 The upstream daemon expects its runtime config at:
 
 ```text
@@ -61,6 +73,19 @@ The persistent generated config used by this add-on lives at:
 /config/pymc-repeater/config.yaml
 ```
 
+At startup, the add-on links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility, but the generated pyMC config points directly at the persistent mapped paths:
+
+```yaml
+storage:
+  storage_dir: /config/pymc-repeater
+repeater:
+  identity_file: /config/pymc-repeater/identity.key
+```
+
+The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`, SQLite WAL files, Glass certificates, and other pyMC history/cache files. If an older install has runtime files in `/data/pymc-repeater`, the wrapper migrates them into `/config/pymc-repeater` on startup without overwriting newer persistent files.
+
+The startup log prints the resolved pyMC config path, storage directory, identity file, `repeater.db`, `metrics.rrd`, selected SQLite table counts, and direct-versus-ingress route probes for the Console graph/history endpoints.
+
 The wrapper sets:
 
 ```yaml
@@ -71,6 +96,10 @@ web:
 That makes pyMC_Repeater serve Console at `/`. The Docker build preserves the original pyMC_Repeater web files under `/opt/pymc_repeater_original_web`, and Nginx serves those files at `/repeater/`.
 
 All existing generated config options from the working `pymc-repeater` add-on are kept, including KISS serial settings, device permissions, storage, logging, Glass options, and ingress behavior.
+
+## AppArmor And Permissions
+
+The add-on uses Home Assistant Supervisor's default AppArmor handling with `apparmor: true`. The declared `addon_config` map grants the container read/write access to `/config`, which is where pyMC now stores its database, RRD, identity, generated config, logs/cache, and related runtime files. Serial, USB, and GPIO access remain declared in `config.yaml` for KISS and radio devices.
 
 ## KISS Example
 

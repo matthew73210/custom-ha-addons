@@ -19,7 +19,83 @@ ln -sfn "${CONFIG_ROOT}" "${ETC_ROOT}"
 if [ -e "${VAR_ROOT}" ] && [ ! -L "${VAR_ROOT}" ]; then
   rm -rf "${VAR_ROOT}"
 fi
-ln -sfn "${DATA_ROOT}" "${VAR_ROOT}"
+ln -sfn "${CONFIG_ROOT}" "${VAR_ROOT}"
+
+MIGRATION_RESULT="$(python3 - <<'PY'
+import pathlib
+import shutil
+import time
+
+source = pathlib.Path("/data/pymc-repeater")
+target = pathlib.Path("/config/pymc-repeater")
+
+if not source.exists():
+    print("No legacy /data/pymc-repeater directory found; migration skipped.")
+    raise SystemExit(0)
+
+try:
+    if source.resolve() == target.resolve():
+        print("Legacy data path already resolves to persistent config storage; migration skipped.")
+        raise SystemExit(0)
+except FileNotFoundError:
+    pass
+
+timestamp = time.strftime("%Y%m%d-%H%M%S")
+conflict_root = target / ".migration-conflicts" / timestamp
+migrated = []
+replaced = []
+conflicts = []
+skipped = []
+
+for item in sorted(source.rglob("*")):
+    rel = item.relative_to(source)
+    if ".migration-conflicts" in rel.parts:
+        continue
+    if item.is_dir():
+        continue
+    if item.is_symlink():
+        skipped.append(f"{rel} (symlink)")
+        continue
+
+    destination = target / rel
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    if not destination.exists():
+        shutil.copy2(item, destination)
+        migrated.append(str(rel))
+        continue
+
+    source_stat = item.stat()
+    dest_stat = destination.stat()
+    same_content_shape = source_stat.st_size == dest_stat.st_size and int(source_stat.st_mtime) == int(dest_stat.st_mtime)
+    if same_content_shape:
+        skipped.append(f"{rel} (already present)")
+        continue
+
+    if source_stat.st_mtime > dest_stat.st_mtime:
+        backup_path = conflict_root / "replaced-targets" / rel
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(destination, backup_path)
+        shutil.copy2(item, destination)
+        replaced.append(str(rel))
+    else:
+        backup_path = conflict_root / "kept-targets" / rel
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, backup_path)
+        conflicts.append(str(rel))
+
+if migrated:
+    print("Migrated legacy files to /config/pymc-repeater: " + ", ".join(migrated))
+if replaced:
+    print("Replaced older persistent files with newer /data copies; previous files saved under " + str(conflict_root / "replaced-targets") + ": " + ", ".join(replaced))
+if conflicts:
+    print("Kept newer persistent files; older /data copies saved under " + str(conflict_root / "kept-targets") + ": " + ", ".join(conflicts))
+if skipped:
+    print("Skipped legacy files: " + ", ".join(skipped))
+if not migrated and not replaced and not conflicts and not skipped:
+    print("Legacy /data/pymc-repeater was empty; migration skipped.")
+PY
+)"
 
 CONFIG_ACTION="$(python3 - <<'PY'
 import copy
@@ -32,6 +108,8 @@ import yaml
 options_path = pathlib.Path("/data/options.json")
 config_root = pathlib.Path("/config/pymc-repeater")
 config_path = config_root / "config.yaml"
+persistent_root = "/config/pymc-repeater"
+identity_file = f"{persistent_root}/identity.key"
 
 with options_path.open("r", encoding="utf-8") as handle:
     options = json.load(handle)
@@ -72,11 +150,10 @@ def enforce_wrapper_fields(config):
         raise TypeError("pyMC config must be a YAML mapping/object")
 
     config.setdefault("repeater", {})
-    if "identity_key" not in config["repeater"]:
-        config["repeater"].setdefault("identity_file", "/etc/pymc_repeater/identity.key")
+    config["repeater"]["identity_file"] = identity_file
 
     config.setdefault("storage", {})
-    config["storage"]["storage_dir"] = "/var/lib/pymc_repeater"
+    config["storage"]["storage_dir"] = persistent_root
 
     config.setdefault("http", {})
     config["http"]["host"] = "127.0.0.1"
@@ -288,7 +365,7 @@ def generated_config():
             "latitude": option_float("latitude", 0.0),
             "longitude": option_float("longitude", 0.0),
             "country": country,
-            "identity_file": "/etc/pymc_repeater/identity.key",
+            "identity_file": identity_file,
             "owner_info": option_str("public_name", ""),
             "cache_ttl": 3600,
             "max_flood_hops": 64,
@@ -380,7 +457,7 @@ def generated_config():
             "max_airtime_per_minute": 3600,
         },
         "storage": {
-            "storage_dir": "/var/lib/pymc_repeater",
+            "storage_dir": persistent_root,
             "retention": {
                 "sqlite_cleanup_days": 31,
             },
@@ -401,7 +478,7 @@ def generated_config():
             "request_timeout_seconds": 10,
             "verify_tls": True,
             "api_token": "",
-            "cert_store_dir": "/etc/pymc_repeater/glass",
+            "cert_store_dir": f"{persistent_root}/glass",
         },
         "http": {
             "host": "127.0.0.1",
@@ -458,9 +535,14 @@ chmod -R u+rwX,g+rwX "${CONFIG_ROOT}" "${DATA_ROOT}"
 
 while IFS= read -r line; do
   bashio::log.info "${line}"
+done <<< "${MIGRATION_RESULT}"
+
+while IFS= read -r line; do
+  bashio::log.info "${line}"
 done <<< "${CONFIG_ACTION}"
 bashio::log.info "/etc/pymc_repeater/config.yaml -> ${CONFIG_PATH}."
-bashio::log.info "Persistent pyMC Repeater data path is /var/lib/pymc_repeater -> ${DATA_ROOT}."
+bashio::log.info "/var/lib/pymc_repeater -> ${CONFIG_ROOT}."
+bashio::log.info "Persistent pyMC Repeater data path is ${CONFIG_ROOT}."
 
 PREFLIGHT_RESULT="$(python3 - <<'PY'
 import os
