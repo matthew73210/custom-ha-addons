@@ -7,6 +7,13 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 - pyMC Repeater: https://github.com/pyMC-dev/pyMC_Repeater
 - pyMC Console distribution: https://github.com/dmduran12/pymc_console-dist
 
+Current upstream build refs:
+
+- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `main`
+- pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `main`
+
+The Docker build logs the resolved commit SHA for each upstream ref. The refs remain configurable with `PYMC_REPEATER_REF` and `PYMC_CONSOLE_REF` build arguments.
+
 ## Installation
 
 1. Add this add-on repository in Home Assistant:
@@ -20,6 +27,16 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 4. Review the add-on options in the Home Assistant add-on **Configuration** tab.
 5. Start the add-on.
 6. Open the dashboard with **Open Web UI**.
+
+## Prebuilt Images
+
+Home Assistant pulls prebuilt images from GitHub Container Registry instead of building locally:
+
+```text
+ghcr.io/matthew73210/pymc-repeater-console-{arch}
+```
+
+The GitHub Actions workflow publishes `amd64` and `aarch64` images tagged with the add-on version, such as `0.2.11`, plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
 
 ## Dashboard Access
 
@@ -46,6 +63,10 @@ The proxy preserves request methods, query strings, POST bodies, form data, cook
 Console packet-cache and graph routes are wrapper-normalized without modifying upstream assets or backend source. The wrapper serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, and `/api/analytics/*` from the persistent SQLite data when needed, while all other API and WebSocket paths are proxied to the upstream backend.
 
 Both upstream frontends expect to run at `/`. The add-on handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
+
+### Browser Note
+
+Chrome and Chromium-based browsers are recommended for Console graph pages through Home Assistant ingress. iPhone/iOS testing currently works. Safari may still have incomplete graph rendering through HA ingress due to browser handling of worker URL rewriting under the ingress path; direct non-ingress access may work even when Safari ingress graph rendering does not.
 
 ## Configuration And Persistence
 

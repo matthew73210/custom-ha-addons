@@ -1,12 +1,12 @@
 name: "pyMC Repeater + Console"
 slug: "pymc-repeater-console"
 description: "pyMC_Repeater with pyMC Console dashboard"
-version: "0.2.10"
-stage: experimental
+version: "0.2.11"
 url: "https://github.com/matthew73210/custom-ha-addons/tree/main/pymc-repeater-console"
 arch:
   - aarch64
   - amd64
+image: "ghcr.io/matthew73210/pymc-repeater-console-{arch}"
 startup: services
 boot: auto
 init: false
