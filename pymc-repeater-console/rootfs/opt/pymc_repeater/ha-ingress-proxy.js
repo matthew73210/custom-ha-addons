@@ -40,13 +40,24 @@
   }
 
   function isManagedPath(path) {
-    return /^\/(api|auth|ws|doc|assets|_next|static|images|img|favicon\.ico|login|setup|configuration|neighbors|statistics|system-stats|cad-calibration|sessions|room-servers|companions|logs|terminal|help)(\/|$|\?)/.test(
+    return /^\/(api|auth|ws|doc|assets|_pymc_map_proxy|_next|static|images|img|favicon\.ico|login|setup|configuration|neighbors|statistics|system-stats|cad-calibration|sessions|room-servers|companions|logs|terminal|help)(\/|$|\?)/.test(
       path
     );
   }
 
   function isRepeaterAssetPath(path) {
     return /^\/(assets|favicon\.ico)(\/|$|\?)/.test(path);
+  }
+
+  function cartoMapProxyPath(url) {
+    if (!url || url.protocol !== 'https:') return null;
+    if (url.hostname === 'basemaps.cartocdn.com') {
+      return '/_pymc_map_proxy/basemaps' + url.pathname + url.search + url.hash;
+    }
+    if (url.hostname === 'tiles.basemaps.cartocdn.com') {
+      return '/_pymc_map_proxy/tiles' + url.pathname + url.search + url.hash;
+    }
+    return null;
   }
 
   function joinBase(path) {
@@ -72,6 +83,8 @@
 
     try {
       var url = new URL(value, window.location.href);
+      var cartoProxyPath = cartoMapProxyPath(url);
+      if (cartoProxyPath) return new URL(joinBase(cartoProxyPath), window.location.href).toString();
       if (url.origin === window.location.origin && isManagedPath(url.pathname)) {
         url.pathname = joinBase(url.pathname);
         return url.toString();

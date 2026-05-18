@@ -36,7 +36,7 @@ Home Assistant pulls prebuilt images from GitHub Container Registry instead of b
 ghcr.io/matthew73210/pymc-repeater-console-{arch}
 ```
 
-The GitHub Actions workflow publishes `amd64` and `aarch64` images tagged with the add-on version, such as `0.2.12`, plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
+The GitHub Actions workflow publishes `aarch64`, `amd64`, `armhf`, `armv7`, and `i386` images tagged with the add-on version plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
 
 ## Dashboard Access
 
@@ -76,7 +76,7 @@ Use your Home Assistant host IP and the configured host port. Do not use Docker-
 
 Ingress is enabled. Home Assistant opens the add-on through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream pyMC_Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
 
-The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. The add-on does not expose host ports by default.
+The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. Contacts map basemap/style requests are routed through a wrapper-owned same-origin proxy so MapLibre tile, sprite, and glyph URLs keep working under Home Assistant ingress without hardcoding an ingress URL. The proxy also normalizes duplicate `/api/api/...` requests emitted by some original Repeater UI panels so settings such as TX Delays can save without patching upstream assets. The add-on does not expose host ports by default.
 
 Console packet-cache and graph routes are wrapper-normalized without modifying upstream assets or backend source. The wrapper serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, and `/api/analytics/*` from the persistent SQLite data when needed, while all other API and WebSocket paths are proxied to the upstream backend.
 
@@ -127,7 +127,7 @@ The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`
 
 Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `log_level` is set to `debug` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
 
-Nginx logs worker asset requests and failed graph/API/WebSocket requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
+Nginx logs worker asset requests plus failed graph/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
 
 The wrapper sets:
 
