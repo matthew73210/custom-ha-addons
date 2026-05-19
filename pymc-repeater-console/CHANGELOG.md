@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.15
+
+- Fixed LBT graph issues in signal lab
+
 ## 0.2.14
 
 - Fixed Contacts live map rendering under Home Assistant ingress with a wrapper-owned same-origin map proxy.
