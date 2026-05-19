@@ -43,11 +43,22 @@ PACKET_COLUMNS = [
     "payload",
     "payload_length",
     "tx_delay_ms",
+    "lbt_attempts",
+    "lbt_backoff_delays_ms",
+    "lbt_channel_busy",
     "packet_hash",
     "original_path",
     "forwarded_path",
     "raw_packet",
 ]
+
+LBT_PACKET_COLUMNS = [
+    "lbt_attempts",
+    "lbt_backoff_delays_ms",
+    "lbt_channel_busy",
+]
+
+LBT_CANDIDATE_TERMS = ("lbt", "backoff", "busy", "attempt")
 
 
 def now_ts() -> float:
@@ -106,9 +117,68 @@ def existing_columns(conn: sqlite3.Connection, table: str) -> list[str]:
     return [row["name"] for row in conn.execute(f"PRAGMA table_info({table})")]
 
 
+def table_info(conn: sqlite3.Connection, table: str) -> list[dict[str, Any]]:
+    if not table_exists(conn, table):
+        return []
+    return [
+        {
+            "cid": row["cid"],
+            "name": row["name"],
+            "type": row["type"],
+            "notnull": bool(row["notnull"]),
+            "default": row["dflt_value"],
+            "pk": bool(row["pk"]),
+        }
+        for row in conn.execute(f"PRAGMA table_info({table})")
+    ]
+
+
+def quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
 def packet_select_columns(conn: sqlite3.Connection) -> list[str]:
     available = set(existing_columns(conn, "packets"))
     return [column for column in PACKET_COLUMNS if column in available]
+
+
+def packet_schema_debug(conn: sqlite3.Connection) -> dict[str, Any]:
+    schema = table_info(conn, "packets")
+    columns = [column["name"] for column in schema]
+    column_set = set(columns)
+    candidate_columns = [
+        column for column in columns
+        if any(term in column.lower() for term in LBT_CANDIDATE_TERMS)
+    ]
+    sample_columns = [
+        column for column in (
+            "timestamp",
+            "type",
+            "route",
+            "transmitted",
+            "tx_delay_ms",
+            *candidate_columns,
+        )
+        if column in column_set
+    ]
+    sample_rows: list[dict[str, Any]] = []
+    if sample_columns:
+        query = (
+            f"SELECT {', '.join(quote_identifier(column) for column in sample_columns)} "
+            "FROM packets ORDER BY timestamp DESC LIMIT 5"
+        )
+        sample_rows = [dict(row) for row in conn.execute(query).fetchall()]
+
+    return {
+        "columns": columns,
+        "schema": schema,
+        "selected_columns": packet_select_columns(conn),
+        "expected_lbt_columns_present": {
+            column: column in column_set for column in LBT_PACKET_COLUMNS
+        },
+        "lbt_candidate_columns": candidate_columns,
+        "recent_lbt_samples": sample_rows,
+    }
 
 
 def read_packets(params: dict[str, list[str]], mode: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -426,6 +496,7 @@ def db_summary() -> dict[str, Any]:
                     table_summary["oldest"] = row["oldest"]
                     table_summary["newest"] = row["newest"]
                 summary["tables"][table] = table_summary
+        summary["packet_schema"] = packet_schema_debug(conn)
     return summary
 
 
