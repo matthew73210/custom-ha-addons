@@ -31,8 +31,10 @@ This repository's Home Assistant app structure was inspired by the excellent ale
 
 AlexBelgium does not maintain or endorse this repository.
 
-This repository is maintained by an electrical engineer, not a professional software developer. I am learning the Home Assistant app ecosystem as I go, so some development conventions, packaging details, or repository structure choices may not be perfect.
+### Development Attribution
+
+This repository was fully coded with assistance from OpenAI Codex under my supervision. I reviewed, directed, and accepted the changes, and I remain responsible for testing, maintenance, and support.
+
+I am an electrical engineer, not a professional software developer. I am learning the Home Assistant app ecosystem as I go, so some development conventions, packaging details, or repository structure choices may not be perfect.
 
 If issues arise, I will do my best to investigate and fix them, but please be patient and include clear logs, reproduction steps, and your Home Assistant version when opening an issue.
-
-Parts of this repository's documentation and wrapper code were drafted or reviewed with AI assistance. Final changes, testing, and maintenance remain my responsibility.
