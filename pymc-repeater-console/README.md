@@ -1,8 +1,8 @@
-# pyMC Repeater + Console Home Assistant Add-on
+# pyMC Repeater + Console Home Assistant App
 
-This add-on packages the working pyMC Repeater daemon and layers the pyMC Console dashboard on top of it for Home Assistant Supervisor.
+This app packages the working pyMC Repeater daemon and layers the pyMC Console dashboard on top of it for Home Assistant Supervisor.
 
-pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST API and WebSocket endpoints exposed by the backend daemon in this add-on. It is not a separate radio daemon.
+pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST API and WebSocket endpoints exposed by the backend daemon in this app. It is not a separate radio daemon.
 
 - pyMC Repeater: https://github.com/pyMC-dev/pyMC_Repeater
 - pyMC Console distribution: https://github.com/dmduran12/pymc_console-dist
@@ -16,17 +16,18 @@ The Docker build logs the resolved commit SHA for each upstream ref. The refs re
 
 ## Installation
 
-1. Add this add-on repository in Home Assistant:
+1. In Home Assistant, go to **Settings -> Apps -> App store**.
+2. Use the repository option or store icon to add this app repository URL:
 
    ```text
    https://github.com/matthew73210/custom-ha-addons
    ```
 
-2. Refresh the add-on store.
-3. Install **pyMC Repeater + Console**.
-4. Review the add-on options in the Home Assistant add-on **Configuration** tab.
-5. Start the add-on.
-6. Open the dashboard with **Open Web UI**.
+3. Refresh the App store if needed.
+4. Install **pyMC Repeater + Console**.
+5. Review the app options in the Home Assistant **Configuration** tab.
+6. Start the app.
+7. Open the dashboard with **Open Web UI**.
 
 ## Prebuilt Images
 
@@ -36,7 +37,7 @@ Home Assistant pulls prebuilt images from GitHub Container Registry instead of b
 ghcr.io/matthew73210/pymc-repeater-console-{arch}
 ```
 
-The GitHub Actions workflow publishes `aarch64`, `amd64`, `armhf`, `armv7`, and `i386` images tagged with the add-on version plus `latest`. Home Assistant Supervisor uses the add-on `version` from `config.yaml` as the image tag.
+The GitHub Actions workflow publishes `aarch64`, `amd64`, `armhf`, `armv7`, and `i386` images tagged with the app version plus `latest`. Home Assistant Supervisor uses the app `version` from `config.yaml` as the image tag.
 
 ## Dashboard Access
 
@@ -56,9 +57,9 @@ Both UIs talk to the same pyMC_Repeater backend API and WebSocket endpoints. A s
 
 ## Companion Frame Server
 
-pyMC_Repeater listens inside the add-on container on TCP port `5000` for companion frame clients. The add-on exposes container port `5000/tcp` as an optional, configurable Home Assistant add-on port. It does not bind host port `5000` by default, so the add-on can install and start even when something else already uses host port `5000`.
+pyMC_Repeater listens inside the app container on TCP port `5000` for companion frame clients. The app exposes container port `5000/tcp` as an optional, configurable Home Assistant app port. It does not bind host port `5000` by default, so the app can install and start even when something else already uses host port `5000`.
 
-To allow remote companion clients, open the add-on **Network** settings and enable or set a host port for `5000/tcp`. Remote clients should connect to:
+To allow remote companion clients, open the app **Network** settings and enable or set a host port for `5000/tcp`. Remote clients should connect to:
 
 ```text
 <HA host IP>:<configured host port>
@@ -74,13 +75,13 @@ Use your Home Assistant host IP and the configured host port. Do not use Docker-
 
 ## Ingress
 
-Ingress is enabled. Home Assistant opens the add-on through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream pyMC_Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
+Ingress is enabled. Home Assistant opens the app through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream pyMC_Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
 
-The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. Contacts map basemap/style requests are routed through a wrapper-owned same-origin proxy so MapLibre tile, sprite, and glyph URLs keep working under Home Assistant ingress without hardcoding an ingress URL. The proxy also normalizes duplicate `/api/api/...` requests emitted by some original Repeater UI panels so settings such as TX Delays can save without patching upstream assets. The add-on does not expose host ports by default.
+The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. Contacts map basemap/style requests are routed through a wrapper-owned same-origin proxy so MapLibre tile, sprite, and glyph URLs keep working under Home Assistant ingress without hardcoding an ingress URL. The proxy also normalizes duplicate `/api/api/...` requests emitted by some original Repeater UI panels so settings such as TX Delays can save without patching upstream assets. The app does not expose host ports by default.
 
 Console packet-cache and graph routes are wrapper-normalized without modifying upstream assets or backend source. The wrapper serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, and `/api/analytics/*` from the persistent SQLite data when needed, while all other API and WebSocket paths are proxied to the upstream backend.
 
-Both upstream frontends expect to run at `/`. The add-on handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
+Both upstream frontends expect to run at `/`. The app handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
 
 ### Browser Note
 
@@ -88,9 +89,9 @@ Chrome and Chromium-based browsers are recommended for Console graph pages throu
 
 ## Configuration And Persistence
 
-Normal users should change settings in the Home Assistant add-on **Configuration** tab. Supervisor stores those settings as add-on options, and the wrapper uses them to create or update the generated pyMC config.
+Normal users should change settings in the Home Assistant **Configuration** tab. Supervisor stores those settings as app options, and the wrapper uses them to create or update the generated pyMC config.
 
-The add-on maps Home Assistant's add-on-specific config directory into the container at:
+The app maps Home Assistant's app-specific config directory into the container at:
 
 ```text
 /config
@@ -108,13 +109,13 @@ The upstream daemon expects its runtime config at:
 /etc/pymc_repeater/config.yaml
 ```
 
-The persistent generated config used by this add-on lives at:
+The persistent generated config used by this app lives at:
 
 ```text
 /config/pymc-repeater/config.yaml
 ```
 
-At startup, the add-on links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility, but the generated pyMC config points directly at the persistent mapped paths:
+At startup, the app links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility, but the generated pyMC config points directly at the persistent mapped paths:
 
 ```yaml
 storage:
@@ -138,11 +139,11 @@ web:
 
 That makes pyMC_Repeater serve Console at `/`. The Docker build preserves the original pyMC_Repeater web files under `/opt/pymc_repeater_original_web`, and Nginx serves those files at `/repeater/`.
 
-All existing generated config options from the working `pymc-repeater` add-on are kept, including KISS serial settings, device permissions, storage, logging, Glass options, and ingress behavior.
+All existing generated config options from the working `pymc-repeater` app are kept, including KISS serial settings, device permissions, storage, logging, Glass options, and ingress behavior.
 
 ## AppArmor And Permissions
 
-The add-on uses Home Assistant Supervisor's default AppArmor handling with `apparmor: true`. The declared `addon_config` map grants the container read/write access to `/config`, which is where pyMC now stores its database, RRD, identity, generated config, logs/cache, and related runtime files. Serial, USB, and GPIO access remain declared in `config.yaml` for KISS and radio devices.
+The app uses Home Assistant Supervisor's default AppArmor handling with `apparmor: true`. The declared `addon_config` map grants the container read/write access to `/config`, which is where pyMC now stores its database, RRD, identity, generated config, logs/cache, and related runtime files. Serial, USB, and GPIO access remain declared in `config.yaml` for KISS and radio devices.
 
 ## KISS Example
 
@@ -156,7 +157,7 @@ kiss_baud_rate: 115200
 
 ## License And Attribution
 
-pyMC Repeater and pyMC Console are MIT licensed upstream. This repository contains only the Home Assistant add-on wrapper files and builds the upstream projects during the Docker build.
+pyMC Repeater and pyMC Console are MIT licensed upstream. This repository contains only the Home Assistant app wrapper files and builds the upstream projects during the Docker build.
 
 See the upstream projects for source, licenses, examples, and current hardware details:
 
