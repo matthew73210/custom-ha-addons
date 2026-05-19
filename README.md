@@ -6,9 +6,9 @@ This repository is a Home Assistant app repository. It contains custom Home Assi
 
 In Home Assistant, open:
 
-Settings -> Apps -> App store
+Settings -> Apps -> App store (install app)
 
-Then use the repository option or store icon to add this app repository URL:
+Then use the repository option or store icon to add this app repository URL (three little dots top right):
 
 ```text
 https://github.com/matthew73210/custom-ha-addons
@@ -23,7 +23,9 @@ Home Assistant Supervisor reads the repository metadata at the root of this repo
 - `pymc-repeater`: pyMC Repeater packaged as a Home Assistant app for MeshCore repeater deployments.
 - `pymc-repeater-console`: pyMC Repeater packaged with the pyMC Console dashboard as the default UI.
 
-Remove or replace the placeholder before publishing a real app for users.
+## Experimental apps
+
+I haven't had time to fully review the pymc-repeater and corescope app so they will appear as experimental.
 
 ## Attribution And Maintainer Note
 
