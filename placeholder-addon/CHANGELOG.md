@@ -2,4 +2,4 @@
 
 ## 0.0.1
 
-- Added non-production placeholder add-on structure.
+- Added non-production placeholder app structure.
