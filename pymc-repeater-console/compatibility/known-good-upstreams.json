@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-20",
+  "purpose": "Track upstream refs known to build and define the wrapper contract for pymc-repeater-console.",
+  "release_policy": {
+    "release_builds": "must pin pyMC Repeater and pyMC Console refs to commit SHAs",
+    "scheduled_main_tests": "may test upstream main but must not publish release images",
+    "compatibility_shims": "must detect and document upstream breakage, not hide it"
+  },
+  "known_good": [
+    {
+      "addon_slug": "pymc-repeater-console",
+      "addon_version": "0.2.15",
+      "status": "observed-current-main-not-release-pinned",
+      "observed_at": "2026-05-20",
+      "pymc_repeater": {
+        "repository": "https://github.com/pyMC-dev/pyMC_Repeater.git",
+        "ref": "main",
+        "resolved_sha": "a36cb6af44ab63247dd6d0f414afc6e53de18012",
+        "package_name": "pymc_repeater",
+        "declared_build_version_override": "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYMC_REPEATER=1.0.5"
+      },
+      "pymc_console": {
+        "repository": "https://github.com/dmduran12/pymc_console-dist.git",
+        "ref": "main",
+        "resolved_sha": "2d961cef1ae1a355eb06e34fba99788d9ffca44a",
+        "frontend_dist_version": "0.9.329"
+      },
+      "wrapper_contract_notes": [
+        "No upstream source should be patched on disk.",
+        "Ingress path/base-url/header/WebSocket adaptation is allowed.",
+        "Local substitute APIs under upstream /api routes are not allowed in normal operation.",
+        "If upstream does not provide /api/analytics routes, the wrapper must not fake them."
+      ]
+    }
+  ]
+}
