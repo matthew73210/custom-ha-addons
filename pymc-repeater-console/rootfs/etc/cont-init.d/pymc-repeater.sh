@@ -111,6 +111,14 @@ config_root = pathlib.Path("/config/pymc-repeater")
 config_path = config_root / "config.yaml"
 persistent_root = "/config/pymc-repeater"
 identity_file = f"{persistent_root}/identity.key"
+wrapper_only_option_keys = {
+    "pymc_tcp_host",
+    "pymc_tcp_port",
+    "pymc_tcp_token",
+    "pymc_tcp_connect_timeout",
+    "pymc_tcp_lbt_enabled",
+    "pymc_tcp_lbt_max_attempts",
+}
 
 with options_path.open("r", encoding="utf-8") as handle:
     options = json.load(handle)
@@ -165,6 +173,9 @@ def write_config(config):
 def enforce_wrapper_fields(config):
     if not isinstance(config, dict):
         raise TypeError("pyMC config must be a YAML mapping/object")
+
+    for key in wrapper_only_option_keys:
+        config.pop(key, None)
 
     config.setdefault("repeater", {})
     config["repeater"]["identity_file"] = identity_file

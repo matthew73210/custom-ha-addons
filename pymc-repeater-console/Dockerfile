@@ -7,8 +7,10 @@ ARG BUILD_ARCH=amd64
 # Pinned to upstream dev because pymc_usb Wi-Fi/TCP (`radio_type: pymc_tcp`)
 # is not in a tagged pyMC_Repeater release or upstream main yet.
 ARG PYMC_REPEATER_REF=8f3477ddd6fa879368dad99e18b258770bdeb380
+ARG PYMC_CORE_REF=3987d3e8863bdf078bc9a9a7e3d29320028f49ee
 ARG PYMC_CONSOLE_REF=main
 ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
+ARG PYMC_CORE_REPO=https://github.com/pyMC-dev/pyMC_core.git
 ARG PYMC_CONSOLE_REPO=https://github.com/dmduran12/pymc_console-dist.git
 
 ENV INSTALL_DIR=/opt/pymc_repeater \
@@ -30,6 +32,8 @@ LABEL \
   org.opencontainers.image.ref.name="${BUILD_VERSION}" \
   org.opencontainers.image.pymc_repeater.repo="${PYMC_REPEATER_REPO}" \
   org.opencontainers.image.pymc_repeater.ref="${PYMC_REPEATER_REF}" \
+  org.opencontainers.image.pymc_core.repo="${PYMC_CORE_REPO}" \
+  org.opencontainers.image.pymc_core.ref="${PYMC_CORE_REF}" \
   org.opencontainers.image.pymc_console.repo="${PYMC_CONSOLE_REPO}" \
   org.opencontainers.image.pymc_console.ref="${PYMC_CONSOLE_REF}" \
   org.opencontainers.image.description="Home Assistant add-on wrapper for pyMC Repeater with pyMC Console"
@@ -37,6 +41,7 @@ LABEL \
 RUN echo "Building pyMC Repeater + Console add-on wrapper version: ${BUILD_VERSION}" \
   && echo "Build architecture: ${BUILD_ARCH}" \
   && echo "pyMC_Repeater upstream: ${PYMC_REPEATER_REPO} ref=${PYMC_REPEATER_REF}" \
+  && echo "pyMC_core upstream override: ${PYMC_CORE_REPO} ref=${PYMC_CORE_REF}" \
   && echo "pyMC Console dist upstream: ${PYMC_CONSOLE_REPO} ref=${PYMC_CONSOLE_REF}" \
   && echo "Wrapper policy: no manage.sh is run; upstream source/dist files are not patched." \
   && echo "Installing wrapper runtime/build packages for pyMC Repeater + Console" \
@@ -73,14 +78,22 @@ RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
   && git fetch --depth 1 origin "${PYMC_REPEATER_REF}" \
   && git checkout --detach FETCH_HEAD \
   && echo "pyMC_Repeater resolved commit: $(git rev-parse HEAD)" \
+  && echo "Verifying checked-out pyMC_Repeater source contains pymc_tcp support" \
+  && grep -n "pymc_tcp" repeater/config.py \
+  && grep -n "pymc_tcp" config.yaml.example \
   && echo "Wrapper policy: not running upstream manage.sh or other install scripts; installing Python package directly."
 
 RUN python3 -m venv --system-site-packages /opt/venv \
   && pip install --no-cache-dir --upgrade pip setuptools wheel \
   && pip install --no-cache-dir . \
-  && python3 -m pip show pymc-repeater || true \
+  && pip install --no-cache-dir --force-reinstall "pymc_core[hardware] @ git+${PYMC_CORE_REPO}@${PYMC_CORE_REF}" \
+  && python3 -m pip show pymc-repeater \
+  && python3 -m pip show pymc-core \
+  && cd / \
+  && python3 -c 'import inspect; from repeater.config import get_radio_for_board; import repeater.config as c; src = inspect.getsource(c); assert "pymc_tcp" in src, "Installed pyMC_Repeater does not contain pymc_tcp support"; print("pymc_tcp support present in installed repeater.config:", c.__file__)' \
+  && python3 -c 'from pymc_core.hardware.tcp_radio import TCPLoRaRadio; print("TCPLoRaRadio import OK:", TCPLoRaRadio)' \
   && mkdir -p /usr/share/licenses/pymc-repeater \
-  && cp LICENSE /usr/share/licenses/pymc-repeater/LICENSE
+  && cp "${INSTALL_DIR}/LICENSE" /usr/share/licenses/pymc-repeater/LICENSE
 
 RUN echo "Copying original pyMC_Repeater web assets without patching upstream files" \
   && mkdir -p "${ORIGINAL_WEB_DIR}" \

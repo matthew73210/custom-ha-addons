@@ -2,6 +2,7 @@
 set -euo pipefail
 
 CONFIG_PATH="/etc/pymc_repeater/config.yaml"
+PYTHON_BIN="/opt/venv/bin/python3"
 BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8001"
 DIRECT_HOST="127.0.0.1"
@@ -19,7 +20,7 @@ s6-svc -O /run/service/pymc-repeater 2>/dev/null || true
 
 log_redacted_config() {
   bashio::log.info "Final generated ${CONFIG_PATH} (secrets redacted):"
-  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
+  "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
 import pathlib
 
 import yaml
@@ -60,7 +61,7 @@ PY
 }
 
 log_storage_diagnostics() {
-  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
+  "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
 import pathlib
 import sqlite3
 
@@ -199,7 +200,7 @@ notify_ready() {
 }
 
 http_probe() {
-  python3 - "$1" <<'PY'
+  "${PYTHON_BIN}" - "$1" <<'PY'
 import sys
 import urllib.error
 import urllib.request
@@ -221,6 +222,23 @@ else:
     print(f"HTTP {status}")
     sys.exit(1)
 PY
+}
+
+runtime_support_sanity() {
+  (
+    cd /
+    "${PYTHON_BIN}" - <<'PY'
+import inspect
+
+import repeater.config as c
+from pymc_core.hardware.tcp_radio import TCPLoRaRadio
+
+src = inspect.getsource(c)
+assert "pymc_tcp" in src, "Installed pyMC_Repeater does not contain pymc_tcp support"
+print(f"pymc_tcp support present in installed repeater.config: {c.__file__}")
+print(f"TCPLoRaRadio import OK: {TCPLoRaRadio}")
+PY
+  )
 }
 
 wait_for_probe() {
@@ -287,9 +305,10 @@ if [ "${DEBUG_LOG}" = "true" ]; then
   log_redacted_config
 fi
 log_storage_diagnostics
+runtime_support_sanity | while IFS= read -r line; do bashio::log.info "runtime | ${line}"; done
 
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
-python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
+"${PYTHON_BIN}" -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
 BACKEND_PID="$!"
 trap 'stop_backend; exit 0' INT TERM
 

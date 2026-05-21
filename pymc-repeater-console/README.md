@@ -10,9 +10,10 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 Current upstream build refs:
 
 - pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `8f3477ddd6fa879368dad99e18b258770bdeb380`
+- pyMC_core repo/ref: `https://github.com/pyMC-dev/pyMC_core.git` / `3987d3e8863bdf078bc9a9a7e3d29320028f49ee`
 - pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `main`
 
-The Docker build logs the resolved commit SHA for each upstream ref. The refs remain configurable with `PYMC_REPEATER_REF` and `PYMC_CONSOLE_REF` build arguments.
+The Docker build logs the resolved commit SHA for each upstream ref and fails if the installed runtime package does not contain `pymc_tcp` support. The refs remain configurable with `PYMC_REPEATER_REF`, `PYMC_CORE_REF`, and `PYMC_CONSOLE_REF` build arguments.
 
 Compatibility note: this app version intentionally pins pyMC_Repeater to an upstream development commit because `pymc_usb` Wi-Fi/TCP modem support is not yet present in a tagged/released pyMC_Repeater version or upstream `main`. The Wi-Fi modem path uses upstream `radio_type: pymc_tcp`. The `pymc_usb` firmware exposes its TCP modem protocol on port `5055` by default; it is not KISS, UDP, WebSocket, HTTP radio control, or serial-over-Wi-Fi. This wrapper only generates the upstream config and does not add a protocol bridge or compatibility shim.
 
