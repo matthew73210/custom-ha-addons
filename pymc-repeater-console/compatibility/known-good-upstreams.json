@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-20",
+  "generated_at": "2026-05-21",
   "purpose": "Track upstream refs known to build and define the wrapper contract for pymc-repeater-console.",
   "release_policy": {
     "release_builds": "must pin pyMC Repeater and pyMC Console refs to commit SHAs",
@@ -10,13 +10,13 @@
   "known_good": [
     {
       "addon_slug": "pymc-repeater-console",
-      "addon_version": "0.2.15",
-      "status": "observed-current-main-not-release-pinned",
-      "observed_at": "2026-05-20",
+      "addon_version": "0.2.16-dev",
+      "status": "pinned-dev-ref-for-pymc-tcp-support",
+      "observed_at": "2026-05-21",
       "pymc_repeater": {
         "repository": "https://github.com/pyMC-dev/pyMC_Repeater.git",
-        "ref": "main",
-        "resolved_sha": "a36cb6af44ab63247dd6d0f414afc6e53de18012",
+        "ref": "8f3477ddd6fa879368dad99e18b258770bdeb380",
+        "resolved_sha": "8f3477ddd6fa879368dad99e18b258770bdeb380",
         "package_name": "pymc_repeater",
         "declared_build_version_override": "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYMC_REPEATER=1.0.5"
       },
@@ -28,6 +28,8 @@
       },
       "wrapper_contract_notes": [
         "No upstream source should be patched on disk.",
+        "pyMC_Repeater is pinned to an upstream dev commit until tagged pymc_tcp support exists.",
+        "pymc_usb Wi-Fi support uses upstream radio_type=pymc_tcp and TCP modem protocol on port 5055 by default.",
         "Ingress path/base-url/header/WebSocket adaptation is allowed.",
         "Local substitute APIs under upstream /api routes are not allowed in normal operation.",
         "If upstream does not provide /api/analytics routes, the wrapper must not fake them."

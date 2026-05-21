@@ -8,6 +8,7 @@ VAR_ROOT="/var/lib/pymc_repeater"
 CONFIG_PATH="${CONFIG_ROOT}/config.yaml"
 OPTIONS_PATH="/data/options.json"
 CONSOLE_WEB_PATH="/opt/pymc_console/web/html"
+PYTHON_BIN="/opt/venv/bin/python3"
 
 mkdir -p "${CONFIG_ROOT}" "${DATA_ROOT}"
 
@@ -21,7 +22,7 @@ if [ -e "${VAR_ROOT}" ] && [ ! -L "${VAR_ROOT}" ]; then
 fi
 ln -sfn "${CONFIG_ROOT}" "${VAR_ROOT}"
 
-MIGRATION_RESULT="$(python3 - <<'PY'
+MIGRATION_RESULT="$("${PYTHON_BIN}" - <<'PY'
 import pathlib
 import shutil
 import time
@@ -97,7 +98,7 @@ if not migrated and not replaced and not conflicts and not skipped:
 PY
 )"
 
-CONFIG_ACTION="$(python3 - <<'PY'
+CONFIG_ACTION="$("${PYTHON_BIN}" - <<'PY'
 import copy
 import json
 import pathlib
@@ -135,6 +136,22 @@ def option_float(name, default):
     if value is None or value == "":
         return default
     return float(value)
+
+
+def option_bool(name, default):
+    value = options.get(name)
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if normalized in ("1", "true", "yes", "on", "enabled"):
+        return True
+    if normalized in ("0", "false", "no", "off", "disabled"):
+        return False
+    return default
 
 
 def write_config(config):
@@ -293,6 +310,13 @@ def apply_wrapper_defaults(config):
     return enforce_wrapper_fields(config), sorted(set(added_defaults))
 
 
+def apply_managed_radio_options(config):
+    defaults = generated_config()
+    for key in ("radio_type", "radio", "kiss", "pymc_tcp"):
+        config[key] = copy.deepcopy(defaults[key])
+    return config
+
+
 presets = {
     "EU_868": {
         "frequency": 869618000,
@@ -356,9 +380,10 @@ def generated_config():
         "sync_word": preset["sync_word"],
     }
     map_region = option_str("map_region", option_str("region", "PAR")).upper()
+    radio_type = option_str("radio_type", "sx1262").lower().strip()
 
     config = {
-        "radio_type": option_str("radio_type", "sx1262"),
+        "radio_type": radio_type,
         "repeater": {
             "node_name": option_str("node_name", "pyMC Repeater"),
             "mode": "forward",
@@ -431,6 +456,14 @@ def generated_config():
         "kiss": {
             "port": option_str("kiss_port", "/dev/ttyUSB0"),
             "baud_rate": option_int("kiss_baud_rate", 115200),
+        },
+        "pymc_tcp": {
+            "host": option_str("pymc_tcp_host", ""),
+            "port": option_int("pymc_tcp_port", 5055),
+            "token": option_str("pymc_tcp_token", ""),
+            "connect_timeout": option_float("pymc_tcp_connect_timeout", 5.0),
+            "lbt_enabled": option_bool("pymc_tcp_lbt_enabled", True),
+            "lbt_max_attempts": option_int("pymc_tcp_lbt_max_attempts", 5),
         },
         "sx1262": {
             "bus_id": 0,
@@ -511,9 +544,10 @@ elif config_path.exists():
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
     enforced_config, added_defaults = apply_wrapper_defaults(copy.deepcopy(config))
+    enforced_config = apply_managed_radio_options(enforced_config)
     if enforced_config != config:
         write_config(enforced_config)
-        action = "reused existing persistent config and merged missing defaults/runtime fields"
+        action = "reused existing persistent config and applied managed radio options/defaults/runtime fields"
     else:
         action = "reused existing persistent config"
 else:
@@ -544,7 +578,7 @@ bashio::log.info "/etc/pymc_repeater/config.yaml -> ${CONFIG_PATH}."
 bashio::log.info "/var/lib/pymc_repeater -> ${CONFIG_ROOT}."
 bashio::log.info "Persistent pyMC Repeater data path is ${CONFIG_ROOT}."
 
-PREFLIGHT_RESULT="$(python3 - <<'PY'
+PREFLIGHT_RESULT="$("${PYTHON_BIN}" - <<'PY'
 import os
 import pathlib
 import sys
@@ -575,6 +609,15 @@ if radio_type == "sx1262" and gpiochip == "/dev/gpiochip0" and not os.path.exist
         "the GPIO device."
     )
     sys.exit(1)
+
+if radio_type == "pymc_tcp":
+    pymc_tcp_config = config.get("pymc_tcp") or {}
+    if not isinstance(pymc_tcp_config, dict):
+        print("Configured radio_type=pymc_tcp requires a pymc_tcp mapping.")
+        sys.exit(1)
+    if not str(pymc_tcp_config.get("host", "")).strip():
+        print("Configured radio_type=pymc_tcp requires pymc_tcp.host.")
+        sys.exit(1)
 
 print("ok")
 PY

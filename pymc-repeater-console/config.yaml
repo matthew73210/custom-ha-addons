@@ -1,7 +1,7 @@
 name: "pyMC Repeater + Console"
 slug: "pymc-repeater-console"
 description: "pyMC_Repeater with pyMC Console dashboard"
-version: "0.2.15"
+version: "0.2.16-dev"
 url: "https://github.com/matthew73210/custom-ha-addons/tree/main/pymc-repeater-console"
 arch:
   - aarch64
@@ -55,6 +55,12 @@ options:
   coding_rate: 8
   kiss_port: "/dev/ttyUSB0"
   kiss_baud_rate: 115200
+  pymc_tcp_host: ""
+  pymc_tcp_port: 5055
+  pymc_tcp_token: ""
+  pymc_tcp_connect_timeout: 5.0
+  pymc_tcp_lbt_enabled: true
+  pymc_tcp_lbt_max_attempts: 5
   admin_password: "change_me"
   glass_enabled: false
   glass_base_url: "http://localhost:8080"
@@ -67,7 +73,7 @@ schema:
   latitude: float
   longitude: float
   country: str
-  radio_type: list(sx1262|sx1262_ch341|kiss)
+  radio_type: list(sx1262|sx1262_ch341|kiss|pymc_tcp)
   map_region: str
   frequency_preset: list(EU_868|EU_868_LONG_RANGE|US_915|US_915_LONG_RANGE|AU_915|NZ_917|CUSTOM)
   frequency_hz: int(100000000,1000000000)
@@ -77,6 +83,12 @@ schema:
   coding_rate: int(5,8)
   kiss_port: str?
   kiss_baud_rate: int(1200,4000000)
+  pymc_tcp_host: str?
+  pymc_tcp_port: int(1,65535)
+  pymc_tcp_token: password?
+  pymc_tcp_connect_timeout: float
+  pymc_tcp_lbt_enabled: bool
+  pymc_tcp_lbt_max_attempts: int(1,20)
   admin_password: password
   glass_enabled: bool
   glass_base_url: str

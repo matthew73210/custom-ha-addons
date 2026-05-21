@@ -9,10 +9,12 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 
 Current upstream build refs:
 
-- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `main`
+- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `8f3477ddd6fa879368dad99e18b258770bdeb380`
 - pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `main`
 
 The Docker build logs the resolved commit SHA for each upstream ref. The refs remain configurable with `PYMC_REPEATER_REF` and `PYMC_CONSOLE_REF` build arguments.
+
+Compatibility note: this app version intentionally pins pyMC_Repeater to an upstream development commit because `pymc_usb` Wi-Fi/TCP modem support is not yet present in a tagged/released pyMC_Repeater version or upstream `main`. The Wi-Fi modem path uses upstream `radio_type: pymc_tcp`. The `pymc_usb` firmware exposes its TCP modem protocol on port `5055` by default; it is not KISS, UDP, WebSocket, HTTP radio control, or serial-over-Wi-Fi. This wrapper only generates the upstream config and does not add a protocol bridge or compatibility shim.
 
 ## Installation
 
@@ -153,6 +155,33 @@ Prefer a stable serial-by-id path when Home Assistant exposes one:
 radio_type: kiss
 kiss_port: /dev/serial/by-id/usb-Example_KISS_Modem_123456-if00-port0
 kiss_baud_rate: 115200
+```
+
+## pymc_usb Wi-Fi/TCP Example
+
+Provision the modem on Wi-Fi first, then set the app options to use upstream `pymc_tcp`:
+
+```yaml
+radio_type: pymc_tcp
+pymc_tcp_host: 192.168.1.50
+pymc_tcp_port: 5055
+pymc_tcp_token: ""
+pymc_tcp_connect_timeout: 5.0
+pymc_tcp_lbt_enabled: true
+pymc_tcp_lbt_max_attempts: 5
+```
+
+At startup the wrapper generates the upstream-compatible block:
+
+```yaml
+radio_type: pymc_tcp
+pymc_tcp:
+  host: 192.168.1.50
+  port: 5055
+  token: ""
+  connect_timeout: 5.0
+  lbt_enabled: true
+  lbt_max_attempts: 5
 ```
 
 ## License And Attribution

@@ -2,9 +2,11 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.14
+ARG BUILD_VERSION=0.2.16-dev
 ARG BUILD_ARCH=amd64
-ARG PYMC_REPEATER_REF=main
+# Pinned to upstream dev because pymc_usb Wi-Fi/TCP (`radio_type: pymc_tcp`)
+# is not in a tagged pyMC_Repeater release or upstream main yet.
+ARG PYMC_REPEATER_REF=8f3477ddd6fa879368dad99e18b258770bdeb380
 ARG PYMC_CONSOLE_REF=main
 ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
 ARG PYMC_CONSOLE_REPO=https://github.com/dmduran12/pymc_console-dist.git
@@ -66,7 +68,10 @@ WORKDIR ${INSTALL_DIR}
 
 RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
   && echo "Cloning pyMC_Repeater ref: ${PYMC_REPEATER_REF}" \
-  && git clone --depth 1 --branch "${PYMC_REPEATER_REF}" "${PYMC_REPEATER_REPO}" . \
+  && git init . \
+  && git remote add origin "${PYMC_REPEATER_REPO}" \
+  && git fetch --depth 1 origin "${PYMC_REPEATER_REF}" \
+  && git checkout --detach FETCH_HEAD \
   && echo "pyMC_Repeater resolved commit: $(git rev-parse HEAD)" \
   && echo "Wrapper policy: not running upstream manage.sh or other install scripts; installing Python package directly."
 
