@@ -10,7 +10,7 @@
   "known_good": [
     {
       "addon_slug": "pymc-repeater-console",
-      "addon_version": "0.2.16-dev",
+      "addon_version": "0.2.18-dev",
       "status": "tracks-upstream-dev-for-pymc-tcp-support",
       "observed_at": "2026-05-22",
       "pymc_repeater": {
@@ -39,6 +39,7 @@
         "pyMC_core is pinned to a commit with TCPLoRaRadio support.",
         "The Docker build and runtime service fail fast if installed repeater.config lacks pymc_tcp support.",
         "pymc_usb Wi-Fi support uses upstream radio_type=pymc_tcp and TCP modem protocol on port 5055 by default.",
+        "For radio_type=pymc_tcp, wrapper auto values generate pymc_usb defaults sync_word=18 and preamble_length=16 unless explicitly overridden.",
         "Ingress path/base-url/header/WebSocket adaptation is allowed.",
         "Local substitute APIs under upstream /api routes are not allowed in normal operation.",
         "If upstream does not provide /api/analytics routes, the wrapper must not fake them."

@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.16-dev
+ARG BUILD_VERSION=0.2.18-dev
 ARG BUILD_ARCH=amd64
 # Tracks upstream dev for this dev app version because pymc_usb Wi-Fi/TCP
 # (`radio_type: pymc_tcp`) is merged there but is not in a tagged release yet.

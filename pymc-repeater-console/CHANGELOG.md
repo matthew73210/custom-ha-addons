@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.18-dev
+
+- Added Home Assistant options for `sync_word` and `preamble_length`.
+- For `radio_type: pymc_tcp`, `sync_word: 0` and `preamble_length: 0` now generate the upstream pymc_usb TCP modem defaults `sync_word: 18` and `preamble_length: 16` instead of forcing the EU preset values.
+- Documented that pyMC_Repeater sends the generated radio config to the TCP modem during startup, so these values must match the modem and mesh.
+- No wrapper-side protocol shim, transport bridge, fake API, synthetic telemetry, or SQLite-backed modem compatibility path was added.
+
 ## 0.2.16-dev
 
 - Bumped the app to a dev version for upstream `pymc_tcp` testing.

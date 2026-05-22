@@ -170,12 +170,25 @@ pymc_tcp_token: ""
 pymc_tcp_connect_timeout: 5.0
 pymc_tcp_lbt_enabled: true
 pymc_tcp_lbt_max_attempts: 5
+tx_power: 22
+sync_word: 0
+preamble_length: 0
 ```
+
+`sync_word` and `preamble_length` use `0` as an automatic wrapper value. For `radio_type: pymc_tcp`, the wrapper writes upstream radio defaults matching the pymc_usb TCP modem defaults: `sync_word: 18` (`0x12`) and `preamble_length: 16`. Set explicit values only when your modem and mesh use different radio settings. The configured `tx_power`, `frequency_hz`, `bandwidth`, `spreading_factor`, and `coding_rate` are also sent to the TCP modem during startup, so they must match the working modem and the rest of the mesh.
 
 At startup the wrapper generates the upstream-compatible block:
 
 ```yaml
 radio_type: pymc_tcp
+radio:
+  frequency: 869618000
+  tx_power: 22
+  bandwidth: 62500
+  spreading_factor: 8
+  coding_rate: 8
+  preamble_length: 16
+  sync_word: 18
 pymc_tcp:
   host: 192.168.1.50
   port: 5055

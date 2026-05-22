@@ -381,17 +381,26 @@ def generated_config():
     preset_name = option_str("frequency_preset", "EU_868").upper()
     preset = dict(presets.get(preset_name, presets["EU_868"]))
     country = option_str("country", "FR").upper()
+    radio_type = option_str("radio_type", "sx1262").lower().strip()
+    tcp_radio = radio_type in ("pymc_tcp", "pymc_usb")
+    default_sync_word = 0x12 if tcp_radio else preset["sync_word"]
+    default_preamble_length = 16 if tcp_radio else preset["preamble_length"]
+    sync_word = option_int("sync_word", 0)
+    preamble_length = option_int("preamble_length", 0)
+    if sync_word <= 0:
+        sync_word = default_sync_word
+    if preamble_length <= 0:
+        preamble_length = default_preamble_length
     radio = {
         "frequency": option_int("frequency_hz", preset["frequency"]),
         "tx_power": option_int("tx_power", preset["tx_power"]),
         "bandwidth": option_int("bandwidth", preset["bandwidth"]),
         "spreading_factor": option_int("spreading_factor", preset["spreading_factor"]),
         "coding_rate": option_int("coding_rate", preset["coding_rate"]),
-        "preamble_length": preset["preamble_length"],
-        "sync_word": preset["sync_word"],
+        "preamble_length": preamble_length,
+        "sync_word": sync_word,
     }
     map_region = option_str("map_region", option_str("region", "PAR")).upper()
-    radio_type = option_str("radio_type", "sx1262").lower().strip()
 
     config = {
         "radio_type": radio_type,
