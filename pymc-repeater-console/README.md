@@ -133,6 +133,10 @@ The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`
 
 Edit `/config/pymc-repeater/config.yaml` to configure radio type, node name, location, logging, KISS serial settings, `pymc_tcp`, Glass, storage, and other pyMC Repeater runtime settings. Use the Home Assistant **Network** settings only for add-on port mappings such as the companion frame server.
 
+The app intentionally has no Home Assistant UI options for pyMC Repeater runtime settings. Values such as node name, coordinates, country, radio type, radio frequency, KISS serial settings, `pymc_tcp`, Glass, admin password, logging, and raw config YAML belong in `/config/pymc-repeater/config.yaml`.
+
+If Home Assistant Supervisor logs warnings about old options such as `node_name`, `radio_type`, `frequency_hz`, `pymc_tcp_host`, or `config_yaml`, those warnings are stale saved add-on options from an older version. They are not options supported by the current wrapper. Reset or re-save the add-on configuration in Home Assistant, or reinstall the add-on if needed, and keep the runtime settings in `/config/pymc-repeater/config.yaml`.
+
 Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `logging.level` in `/config/pymc-repeater/config.yaml` is set to `DEBUG` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
 
 Nginx logs worker asset requests plus failed graph/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
@@ -171,7 +175,7 @@ Provision the modem on Wi-Fi first, then edit `/config/pymc-repeater/config.yaml
 radio_type: pymc_tcp
 radio:
   frequency: 869618000
-  tx_power: 22
+  tx_power: 14
   bandwidth: 62500
   spreading_factor: 8
   coding_rate: 8

@@ -194,8 +194,8 @@ def default_config():
             "bandwidth": 62500,
             "spreading_factor": 8,
             "coding_rate": 8,
-            "preamble_length": 17,
-            "sync_word": 13380,
+            "preamble_length": 16,
+            "sync_word": 18,
         },
         "kiss": {
             "port": "/dev/ttyUSB0",

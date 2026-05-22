@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.25-dev
+
+- Kept pyMC Repeater runtime configuration file-only; no removed Home Assistant runtime options were restored.
+- Corrected the one-time default persisted config template to use the intended EU radio defaults.
+- Documented stale Supervisor option warnings as migration noise from old saved add-on options.
+- Added contract coverage proving generated defaults are not reapplied over user-edited persisted config files.
+
 ## 0.2.24-dev
 
 - Updated the pinned pyMC Repeater default ref to a buildable upstream commit that includes `radio_type: pymc_tcp` support.

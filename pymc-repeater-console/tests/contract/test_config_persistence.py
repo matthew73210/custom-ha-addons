@@ -13,21 +13,65 @@ REMOVED_HA_OPTION_REFERENCES = {
     "/data/options.json",
     "bashio::config",
     "config_yaml",
+    "frequency_hz",
     "frequency_preset",
+    "glass_enabled",
+    "glass_inform_interval_seconds",
+    "kiss_baud_rate",
+    "kiss_port",
+    "map_region",
+    "option_str",
+    "option_int",
+    "option_bool",
+    "public_name",
+    "pymc_tcp_connect_timeout",
+    "pymc_tcp_host",
+    "pymc_tcp_lbt_enabled",
+    "pymc_tcp_lbt_max_attempts",
+    "pymc_tcp_port",
+    "pymc_tcp_token",
+}
+
+DEFAULT_EU_RADIO_VALUES = {
+    "frequency": 869618000,
+    "bandwidth": 62500,
+    "spreading_factor": 8,
+    "coding_rate": 8,
+    "sync_word": 18,
+    "preamble_length": 16,
+    "tx_power": 14,
+}
+
+OLD_HOME_ASSISTANT_RUNTIME_OPTIONS = {
+    "node_name",
+    "public_name",
+    "latitude",
+    "longitude",
+    "country",
+    "radio_type",
+    "map_region",
+    "frequency_preset",
+    "frequency_hz",
+    "tx_power",
+    "bandwidth",
+    "spreading_factor",
+    "coding_rate",
+    "sync_word",
+    "preamble_length",
+    "kiss_port",
+    "kiss_baud_rate",
     "pymc_tcp_host",
     "pymc_tcp_port",
     "pymc_tcp_token",
     "pymc_tcp_connect_timeout",
     "pymc_tcp_lbt_enabled",
     "pymc_tcp_lbt_max_attempts",
-    "kiss_port",
-    "kiss_baud_rate",
+    "admin_password",
     "glass_enabled",
     "glass_base_url",
     "glass_inform_interval_seconds",
-    "option_str",
-    "option_int",
-    "option_bool",
+    "log_level",
+    "config_yaml",
 }
 
 
@@ -116,6 +160,21 @@ def test_missing_persistent_config_is_created_once(tmp_path):
     assert "unchanged" in second_output
 
 
+def test_default_config_contains_eu_radio_defaults_once(tmp_path):
+    config_path = tmp_path / "pymc-repeater/config.yaml"
+
+    run_config_action(config_path)
+    first_content = config_path.read_text(encoding="utf-8")
+    for key, value in DEFAULT_EU_RADIO_VALUES.items():
+        assert f"  {key}: {value}\n" in first_content
+
+    user_content = first_content.replace("  tx_power: 14\n", "  tx_power: 7\n")
+    config_path.write_text(user_content, encoding="utf-8")
+    run_config_action(config_path)
+
+    assert config_path.read_text(encoding="utf-8") == user_content
+
+
 def test_removed_home_assistant_runtime_options_are_not_referenced_by_startup_scripts():
     startup_text = "\n".join(
         path.read_text(encoding="utf-8")
@@ -131,3 +190,5 @@ def test_addon_config_has_no_home_assistant_runtime_options_or_schema():
     config_yaml = (ADDON_ROOT / "config.yaml").read_text(encoding="utf-8")
     assert "\noptions:" not in config_yaml
     assert "\nschema:" not in config_yaml
+    for option_key in OLD_HOME_ASSISTANT_RUNTIME_OPTIONS:
+        assert f"{option_key}:" not in config_yaml
