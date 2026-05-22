@@ -1,48 +1,35 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-22",
-  "purpose": "Track upstream refs known to build and define the wrapper contract for pymc-repeater-console.",
+  "verification_date": "2026-05-20",
+  "purpose": "Track upstream refs known to build and candidates for the pymc-repeater-console wrapper contract.",
+  "status_note": "These refs are known-good candidates from review, not guaranteed by contract tests yet.",
   "release_policy": {
-    "release_builds": "must pin pyMC Repeater and pyMC Console refs to commit SHAs",
-    "scheduled_main_tests": "may test upstream main but must not publish release images",
-    "compatibility_shims": "must detect and document upstream breakage, not hide it"
+    "release_builds": "should pin pyMC Repeater and pyMC Console refs to commit SHAs",
+    "scheduled_or_dev_tests": "may test upstream main but must not publish release images",
+    "upstream_drift": "must be detected and reported, not hidden by compatibility shims"
   },
-  "known_good": [
+  "known_good_candidates": [
     {
       "addon_slug": "pymc-repeater-console",
-      "addon_version": "0.2.18-dev",
-      "status": "tracks-upstream-dev-for-pymc-tcp-support",
-      "observed_at": "2026-05-22",
+      "verification_date": "2026-05-20",
+      "contract_test_status": "not-yet-guaranteed",
       "pymc_repeater": {
-        "repository": "https://github.com/pyMC-dev/pyMC_Repeater.git",
-        "ref": "dev",
-        "resolved_sha": "resolved at Docker build time from upstream dev",
-        "package_name": "pymc_repeater",
-        "declared_build_version_override": "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYMC_REPEATER=1.0.5"
+        "repository": "pyMC-dev/pyMC_Repeater",
+        "resolved_sha": "a36cb6af44ab63247dd6d0f414afc6e53de18012",
+        "status": "known-good-candidate"
       },
-      "pymc_core": {
-        "repository": "https://github.com/pyMC-dev/pyMC_core.git",
-        "ref": "3987d3e8863bdf078bc9a9a7e3d29320028f49ee",
-        "resolved_sha": "3987d3e8863bdf078bc9a9a7e3d29320028f49ee",
-        "package_name": "pymc_core"
-      },
-      "pymc_console": {
-        "repository": "https://github.com/dmduran12/pymc_console-dist.git",
-        "ref": "main",
+      "pymc_console_dist": {
+        "repository": "dmduran12/pymc_console-dist",
         "resolved_sha": "2d961cef1ae1a355eb06e34fba99788d9ffca44a",
-        "frontend_dist_version": "0.9.329"
+        "version": "0.9.329",
+        "status": "known-good-candidate"
       },
       "wrapper_contract_notes": [
         "No upstream source should be patched on disk.",
-        "This dev add-on version tracks upstream pyMC_Repeater dev until tagged pymc_tcp support exists.",
-        "This is not release-stable pinning.",
-        "pyMC_core is pinned to a commit with TCPLoRaRadio support.",
-        "The Docker build and runtime service fail fast if installed repeater.config lacks pymc_tcp support.",
-        "pymc_usb Wi-Fi support uses upstream radio_type=pymc_tcp and TCP modem protocol on port 5055 by default.",
-        "For radio_type=pymc_tcp, wrapper auto values generate pymc_usb defaults sync_word=18 and preamble_length=16 unless explicitly overridden.",
-        "Ingress path/base-url/header/WebSocket adaptation is allowed.",
-        "Local substitute APIs under upstream /api routes are not allowed in normal operation.",
-        "If upstream does not provide /api/analytics routes, the wrapper must not fake them."
+        "Ingress path/base-url/header/WebSocket adaptation is allowed when response content remains upstream-controlled.",
+        "Local substitute APIs under upstream-looking /api routes are not allowed in normal operation.",
+        "If upstream does not provide /api/analytics routes, the wrapper must not fake them.",
+        "These refs should be promoted to release pins only after contract tests pass."
       ]
     }
   ]
