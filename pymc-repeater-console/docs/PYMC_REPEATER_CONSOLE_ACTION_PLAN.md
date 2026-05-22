@@ -8,7 +8,7 @@ Ingress and base-path adaptation are valid wrapper behavior. Local substitute AP
 
 ## 1. Current Verdict
 
-Current status: **runtime fork-like with suspicious ingress response rewrites**.
+Current status after Phase 3: **wrapper-pure for upstream-looking API routes, with suspicious ingress response rewrites remaining for Phase 4**.
 
 Build and filesystem purity:
 
@@ -22,9 +22,9 @@ Runtime and API purity:
 
 - Nginx transparently proxies most routes to upstream pyMC Repeater.
 - Home Assistant ingress path, header, cookie, redirect, and WebSocket adaptations are valid wrapper behavior when request and response content remain upstream-controlled.
-- `console_compat_api.py` locally serves upstream-looking API routes from SQLite and synthetic analytics logic.
-- Nginx intercepts `/api/recent_packets`, `/api/bulk_packets`, `/api/filtered_packets`, and `/api/analytics/*` and routes them to `console_compat_api.py` instead of upstream.
-- Verdict: **runtime/API layer is not pure wrapper**.
+- Nginx transparently proxies `/api/recent_packets`, `/api/bulk_packets`, `/api/filtered_packets`, and `/api/analytics/*` to upstream pyMC Repeater.
+- `console_compat_api.py` remains quarantined legacy code but is not started and is not routed to in normal operation.
+- Verdict: **runtime/API layer is wrapper-pure for upstream-looking API routes**.
 
 ## 2. Wrapper Boundary
 
@@ -61,13 +61,13 @@ Classification rules:
 
 | Finding | File/path | Current behavior | Classification | Why it matters | Proposed fix | Risk | Runtime behavior change |
 |---|---|---|---|---|---|---|---|
-| Local compatibility API | `rootfs/opt/pymc_repeater/console_compat_api.py` | Serves upstream-looking packet and analytics API routes from local Python code. | Violation | Reimplements upstream behavior and can hide upstream API changes. | Remove it, or quarantine behind explicit temporary compatibility mode that defaults off. | High | Yes, in Phase 3 |
-| Intercepted packet APIs | `rootfs/etc/nginx/conf.d/pymc-repeater-ingress.conf` | Routes `/api/recent_packets`, `/api/bulk_packets`, and `/api/filtered_packets` to `127.0.0.1:8090`. | Violation | Current upstream pyMC Repeater provides these endpoints; the wrapper should proxy unchanged. | Proxy these routes to upstream `127.0.0.1:8001` or delete special locations so the default upstream proxy handles them. | High | Yes, in Phase 3 |
-| Intercepted analytics APIs | `rootfs/etc/nginx/conf.d/pymc-repeater-ingress.conf` | Routes `/api/analytics/*` to `127.0.0.1:8090`. | Violation | Upstream pyMC Repeater currently does not appear to provide these analytics routes. The wrapper must not fake them. | Do not synthesize analytics. Either proxy if upstream adds them, or let the console fail clearly/document unsupported pages. | High | Yes, in Phase 3 |
-| SQLite-backed API recreation | `console_compat_api.py` | Reads `packets`, `adverts`, and schema details from `/config/pymc-repeater/repeater.db`. | Violation | Ties wrapper to upstream private storage internals and bypasses upstream API contract. | Remove SQLite reads from any upstream-looking API. Keep SQLite inspection only in clearly named diagnostics if needed. | High | Yes, in Phase 3 |
-| Inserted packet fields | `console_compat_api.py` | Adds or aliases `packet_origin`, `route_type`, `payload_type`, and coerces booleans. | Violation | Changes upstream response schema and may hide missing or changed fields. | Pass upstream responses unchanged. Contract-test that expected fields come from upstream. | High | Yes, in Phase 3 |
-| Synthetic analytics values | `console_compat_api.py` | Returns generated topology, bucketed stats, empty arrays, `avgConfidence: 1.0`, and other default payloads. | Violation | Produces data that looks authoritative but is wrapper-invented. | Remove synthetic analytics. Unsupported upstream analytics should fail clearly. | High | Yes, in Phase 3 |
-| Auth presence check | `console_compat_api.py` | Accepts any request with an `Authorization` header or `token` query. | Violation | Differs from upstream auth semantics and may weaken protected routes. | Remove public routing to the compat API. Diagnostics must use explicit wrapper auth or remain private. | High | Yes, in Phase 3 |
+| Local compatibility API | `rootfs/opt/pymc_repeater/console_compat_api.py` | Quarantined legacy file; no s6 service and no Nginx route use it in normal operation. | OK quarantine | It no longer serves upstream-looking API responses. | Keep unused or delete in a later cleanup. | Low | No current runtime API behavior |
+| Intercepted packet APIs | `rootfs/etc/nginx/conf.d/pymc-repeater-ingress.conf` | Special `8090` locations removed; default upstream proxy handles `/api/recent_packets`, `/api/bulk_packets`, and `/api/filtered_packets`. | OK | Upstream controls auth, schema, and response content. | Keep proxied unchanged. | Low | Implemented in Phase 3 |
+| Intercepted analytics APIs | `rootfs/etc/nginx/conf.d/pymc-repeater-ingress.conf` | Special `8090` location removed; default upstream proxy handles `/api/analytics/*`. | OK | The wrapper no longer fakes analytics; upstream serves or fails natively. | Keep proxied unchanged and document unsupported upstream pages if needed. | Low | Implemented in Phase 3 |
+| SQLite-backed API recreation | `console_compat_api.py` | Quarantined legacy code still contains SQLite readers, but no normal route or service reaches it. | OK quarantine | Runtime no longer ties upstream-looking APIs to private SQLite internals. | Keep unreachable or delete in a later cleanup. | Low | Implemented in Phase 3 |
+| Inserted packet fields | `console_compat_api.py` | Quarantined legacy code still contains field insertion logic, but no normal route or service reaches it. | OK quarantine | Runtime no longer changes packet API schema. | Keep unreachable or delete in a later cleanup. | Low | Implemented in Phase 3 |
+| Synthetic analytics values | `console_compat_api.py` | Quarantined legacy code still contains synthetic analytics handlers, but no normal route or service reaches it. | OK quarantine | Runtime no longer returns wrapper-invented analytics. | Keep unreachable or delete in a later cleanup. | Low | Implemented in Phase 3 |
+| Auth presence check | `console_compat_api.py` | Quarantined legacy code still contains local auth checks, but no normal route or service reaches it. | OK quarantine | Runtime API auth is upstream auth again. | Keep unreachable or delete in a later cleanup. | Low | Implemented in Phase 3 |
 | `/api/api/*` duplicate-prefix rewrite | `pymc-repeater-ingress.conf` | Rewrites `/api/api/<path>` to `/api/<path>` and forwards onward. | OK | This is path-only transport normalization and does not generate or mutate responses. | Keep only if contract tests show it corrects an ingress/base-client duplicate-prefix issue. Document as ingress transport normalization. | Low | No immediate change |
 | Main reverse proxy | `pymc-repeater-ingress.conf` | Proxies most routes to upstream `127.0.0.1:8001` with HA forwarding headers, redirects, cookies, and WebSocket upgrades. | OK | Required for HA ingress and direct access. | Keep. Add route/proxy contract tests. | Medium | No |
 | HA ingress JS helper | `rootfs/opt/pymc_repeater/ha-ingress-proxy.js` | Rewrites browser request, asset, worker, EventSource, and WebSocket URLs to ingress base paths. | OK if path-only | Valid when limited to transport/base-url adaptation. | Document allowed scope and test that request/response bodies are unchanged. | Medium | No immediate change |
@@ -117,21 +117,20 @@ Goal: detect upstream breakage instead of hiding it.
 - Added route tests for Console `/`, Repeater `/repeater/`, helper scripts, `/api/api/*` normalization, and default proxy behavior.
 - Added ingress-style tests for `X-Ingress-Path`, helper assets, redirects, and WebSocket upgrade path behavior.
 - Added config persistence tests for preserving existing config, one-time default creation, removed option references, and missing `options:`/`schema:`.
-- Added upstream API contract tests documenting current Phase 3 violations as `xfail`.
+- Added upstream API contract tests that now pass once Phase 3 removed normal compat API routing.
 - Configurable port coverage currently comes from direct `8000` vs ingress `8080` URL selection through environment variables.
 
-Deliverable: contract suite that fails when current wrapper routing/config assumptions break, with future API purity checks marked `xfail` until Phase 3.
+Deliverable: contract suite that fails when current wrapper routing/config/API purity assumptions break.
 
 ### Phase 3 - Remove or quarantine fork-like behavior
 
 Goal: restore runtime/API wrapper purity.
 
-- Stop intercepting `/api/recent_packets`, `/api/bulk_packets`, `/api/filtered_packets`, and `/api/analytics/*` unless there is a documented unavoidable reason.
-- Prefer proxying to upstream unchanged.
-- For current upstream, proxy `/api/recent_packets`, `/api/bulk_packets`, and `/api/filtered_packets` to pyMC Repeater because upstream provides them.
-- If upstream does not provide `/api/analytics/*`, do not fake it.
-- Make Console analytics pages fail clearly or document them as unsupported until upstream provides the APIs.
-- Remove `console_compat_api.py`, or isolate it behind explicit temporary compatibility mode that defaults off and is clearly labeled non-release/deprecated.
+- Removed Nginx interception of `/api/recent_packets`, `/api/bulk_packets`, `/api/filtered_packets`, and `/api/analytics/*`.
+- Default proxying now sends those routes to upstream unchanged.
+- If upstream does not provide `/api/analytics/*`, the wrapper no longer fakes it.
+- Removed the compat API from normal s6 startup and ingress dependencies.
+- Left `console_compat_api.py` as quarantined legacy code that is not started or routed to.
 
 Deliverable: no local substitute upstream APIs in normal operation.
 

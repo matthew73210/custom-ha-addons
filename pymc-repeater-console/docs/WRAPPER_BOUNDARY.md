@@ -17,8 +17,8 @@ Runtime/API status:
 
 - Transparent reverse proxying and Home Assistant ingress base-path handling are wrapper behavior.
 - Path-only ingress normalization, including duplicate-prefix correction, is acceptable when upstream receives the request and the upstream response body is passed through unchanged.
-- `console_compat_api.py` is outside the normal wrapper boundary when it serves upstream-looking API responses from local code or SQLite.
-- Runtime/API layer verdict from the action plan: runtime fork-like until local substitute API routes are removed or quarantined.
+- `console_compat_api.py` is quarantined legacy code and is not started or routed to in normal operation.
+- Runtime/API layer verdict after Phase 3: upstream-looking packet and analytics routes are no longer served by local wrapper code in normal operation.
 
 ## Allowed Wrapper Behavior
 

@@ -372,7 +372,6 @@ bashio::log.info "pyMC Repeater backend is accepting HTTP"
 
 wait_for_probe "Direct wrapper HTTP" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/"
 wait_for_probe "Direct wrapper API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/stats"
-wait_for_probe "Direct wrapper graph compatibility API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/analytics/debug"
 bashio::log.info "Direct wrapper entrypoint is accepting HTTP"
 
 wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"

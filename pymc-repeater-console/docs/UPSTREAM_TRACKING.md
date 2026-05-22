@@ -117,7 +117,7 @@ Phase 2 adds the local contract test suite under:
 pymc-repeater-console/tests/contract
 ```
 
-The suite can run against supplied direct/ingress URLs or start a Docker image when `PYMC_REPEATER_CONSOLE_IMAGE` is provided. Current-state route and config tests are normal tests. Future API-purity expectations for known Phase 3 violations are marked `xfail` so the suite documents the desired contract without changing runtime behavior.
+The suite can run against supplied direct/ingress URLs or start a Docker image when `PYMC_REPEATER_CONSOLE_IMAGE` is provided. Current-state route, config, and API-purity tests are normal tests after Phase 3 removed normal compat API routing.
 
 ## Failure Policy
 

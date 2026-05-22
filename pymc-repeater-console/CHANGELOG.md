@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.22-dev
+
+- Removed normal-operation routing to the local substitute Console compatibility API.
+- Packet APIs now pass through the normal upstream proxy unchanged.
+- Analytics APIs are no longer synthesized; upstream handles them or returns its native failure.
+- Quarantined the old compatibility API by removing its s6 service from normal startup.
+- Updated contract tests for Phase 3 API purity expectations.
+- No upstream source files were changed.
+
 ## 0.2.21-dev
 
 - Added the Phase 2 contract test suite for container smoke checks, route/proxy checks, ingress-style path checks, upstream API contract expectations, and config persistence.

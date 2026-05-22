@@ -23,6 +23,13 @@ RUN_SCRIPT = ADDON_ROOT / "rootfs/etc/s6-overlay/s6-rc.d/pymc-repeater/run"
 CONT_INIT_SCRIPT = ADDON_ROOT / "rootfs/etc/cont-init.d/pymc-repeater.sh"
 NGINX_CONFIG = ADDON_ROOT / "rootfs/etc/nginx/conf.d/pymc-repeater-ingress.conf"
 COMPAT_API = ADDON_ROOT / "rootfs/opt/pymc_repeater/console_compat_api.py"
+COMPAT_SERVICE_USER_ENTRY = (
+    ADDON_ROOT / "rootfs/etc/s6-overlay/s6-rc.d/user/contents.d/pymc-console-compat-api"
+)
+COMPAT_SERVICE_INGRESS_DEPENDENCY = (
+    ADDON_ROOT
+    / "rootfs/etc/s6-overlay/s6-rc.d/pymc-repeater-ingress/dependencies.d/pymc-console-compat-api"
+)
 
 
 @dataclass(frozen=True)

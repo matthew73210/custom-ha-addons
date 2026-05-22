@@ -220,8 +220,6 @@ RUN chmod a+x \
     /etc/cont-init.d/pymc-repeater.sh \
     /etc/s6-overlay/s6-rc.d/pymc-repeater-ingress/run \
     /etc/s6-overlay/s6-rc.d/pymc-repeater-ingress/finish \
-    /etc/s6-overlay/s6-rc.d/pymc-console-compat-api/run \
-    /etc/s6-overlay/s6-rc.d/pymc-console-compat-api/finish \
     /etc/s6-overlay/s6-rc.d/pymc-repeater/run \
     /etc/s6-overlay/s6-rc.d/pymc-repeater/finish \
   && mkdir -p /config/pymc-repeater /data/pymc-repeater /run/nginx

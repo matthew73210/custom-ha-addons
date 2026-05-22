@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Wrapper-owned compatibility API for pyMC Console graph data.
+"""Deprecated compatibility API for pyMC Console graph data.
 
-The upstream pyMC_Repeater API remains untouched.  This small local service
-fills the Console graph/history routes from the add-on's persistent SQLite DB
-and normalizes packet rows for the Console packet cache.
+This file is quarantined legacy code.  It is not started by s6 and no normal
+Nginx route forwards upstream-looking /api/* traffic to it.  The wrapper must
+proxy upstream APIs unchanged rather than use this local SQLite-backed service
+to recreate or synthesize upstream responses.
 """
 
 from __future__ import annotations

@@ -17,10 +17,10 @@ Classification:
 | `/ha-ingress-proxy.js` | GET | Wrapper static file `/opt/pymc_repeater/ha-ingress-proxy.js` | OK | Wrapper-owned helper for browser-side ingress base-path URL adaptation. | Keep documented. Test that it only adapts request URLs and does not generate upstream API data. |
 | `/ha-console-nav.js` | GET | Wrapper static file `/opt/pymc_repeater/ha-console-nav.js` | OK | Wrapper-owned navigation control between Console and Repeater UI. | Keep isolated and documented as wrapper UI chrome. |
 | `/api/api/*` | Any | Nginx rewrite to `/api/*`, then normal upstream proxy | OK | Path-only duplicate-prefix normalization. It does not generate a response and should forward to upstream unchanged. | Keep only if contract tests prove response content is upstream unchanged. Document under ingress transport normalization. |
-| `/api/recent_packets` | GET | Intercepted by Nginx and proxied to local `console_compat_api.py` on `127.0.0.1:8090` | Violation | Upstream-looking API response is generated locally. Review found upstream currently provides this route, so the wrapper should not substitute it. | Phase 3: stop intercepting and proxy to upstream unchanged, or fail clearly if upstream does not provide it. |
-| `/api/bulk_packets` | GET | Intercepted by Nginx and proxied to local `console_compat_api.py` on `127.0.0.1:8090` | Violation | Local substitute API can hide upstream route/schema changes. | Phase 3: stop intercepting and proxy to upstream unchanged when upstream provides it. |
-| `/api/filtered_packets` | GET | Intercepted by Nginx and proxied to local `console_compat_api.py` on `127.0.0.1:8090` | Violation | Local substitute API can hide upstream filtering behavior and packet schema changes. | Phase 3: stop intercepting and proxy to upstream unchanged when upstream provides it. |
-| `/api/analytics/*` | GET | Intercepted by Nginx and proxied to local `console_compat_api.py` on `127.0.0.1:8090` | Violation | Upstream pyMC Repeater did not appear to provide these routes during review. The wrapper must not fake analytics when upstream does not provide them. | Phase 3: remove synthetic analytics. Proxy only if upstream adds these APIs; otherwise let Console fail clearly or document unsupported pages. |
+| `/api/recent_packets` | GET | Default proxy to upstream pyMC Repeater at `127.0.0.1:8001` | OK | Upstream receives the request and controls auth, schema, and response content. | Keep proxied unchanged; contract-test that wrapper does not intercept it. |
+| `/api/bulk_packets` | GET | Default proxy to upstream pyMC Repeater at `127.0.0.1:8001` | OK | Upstream receives the request and controls auth, schema, and response content. | Keep proxied unchanged; contract-test that wrapper does not intercept it. |
+| `/api/filtered_packets` | GET | Default proxy to upstream pyMC Repeater at `127.0.0.1:8001` | OK | Upstream receives the request and controls auth, schema, and response content. | Keep proxied unchanged; contract-test that wrapper does not intercept it. |
+| `/api/analytics/*` | GET | Default proxy to upstream pyMC Repeater at `127.0.0.1:8001` | OK | The wrapper no longer synthesizes analytics. Upstream either serves the route or returns its native failure. | Keep proxied unchanged; do not fake analytics. |
 | `/_pymc_map_proxy/basemaps/*` | GET | Wrapper same-origin proxy to `https://basemaps.cartocdn.com` | Suspicious | Not an upstream pyMC API, but it rewrites third-party JSON URLs for ingress/browser same-origin behavior. | Keep only if required. Document as ingress/map transport exception and add tests. |
 | `/_pymc_map_proxy/tiles/*` | GET | Wrapper same-origin proxy to `https://tiles.basemaps.cartocdn.com` | Suspicious | Not an upstream pyMC API, but it rewrites third-party JSON URLs. | Keep only if required. Document as ingress/map transport exception and add tests. |
 | `/repeater` | GET | Nginx redirect to `$ingress_prefix/repeater/` | OK | Wrapper path normalization for the preserved upstream Repeater UI. | Keep. Test direct and ingress-style redirect behavior. |
@@ -29,9 +29,11 @@ Classification:
 | `/ws/companion_frame` | WebSocket | Default proxy to upstream pyMC Repeater | OK | Valid WebSocket forwarding when upgrade headers and messages pass through unchanged. | Add contract test proving upgrade succeeds and message content is not wrapper-mutated. |
 | Other `/api/*` routes | Any | Default proxy to upstream pyMC Repeater unless explicitly intercepted above | OK | Transparent upstream API proxying is valid wrapper behavior. | Add tests that proxied APIs are upstream-controlled and not response-mutated. |
 
-## Local Compatibility API Surface
+## Quarantined Compatibility API
 
-The local service `console_compat_api.py` currently serves these paths:
+`console_compat_api.py` remains in the repository as quarantined legacy code for now, but it is not in the s6 user bundle, has no ingress service dependency, and receives no normal Nginx traffic.
+
+The quarantined file contains handlers for these old paths:
 
 - `/health`
 - `/api/recent_packets`
@@ -48,9 +50,7 @@ The local service `console_compat_api.py` currently serves these paths:
 - `/api/analytics/sparklines`
 - `/api/analytics/debug`
 
-`/health` is acceptable only as a wrapper diagnostic if it is not exposed as an upstream route and is documented under a wrapper-owned namespace or private service boundary.
-
-All `/api/*` routes served by `console_compat_api.py` are violations in normal operation because they generate upstream-looking API responses locally.
+These handlers must not be reconnected to upstream-looking `/api/*` paths in normal operation.
 
 ## Upstream Routes That Should Pass Through
 
@@ -69,11 +69,11 @@ The wrapper should proxy upstream-provided routes unchanged. Current review iden
 - `/ws/packets`
 - `/ws/companion_frame`
 
-Contract tests should verify these routes are reachable only when upstream provides them and that wrapper code does not insert packet schema fields, LBT fields, fake defaults, or synthetic analytics.
+Contract tests verify these routes are not intercepted by wrapper Python code. If upstream provides them, upstream response content passes through unchanged.
 
 ## Routes Upstream Does Not Currently Provide
 
-The review did not find upstream pyMC Repeater support for `/api/analytics/*`.
+The review did not find upstream pyMC Repeater support for `/api/analytics/*`. After Phase 3 these routes are still forwarded upstream, but the wrapper does not synthesize responses.
 
 Required behavior:
 

@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import pytest
-
-from helpers import COMPAT_API, NGINX_CONFIG, http_request
-
-
-FUTURE_CONTRACT_REASON = (
-    "Phase 3 has not removed console_compat_api.py interception yet; "
-    "this test documents the desired wrapper-only contract."
+from helpers import (
+    COMPAT_SERVICE_INGRESS_DEPENDENCY,
+    COMPAT_SERVICE_USER_ENTRY,
+    NGINX_CONFIG,
+    http_request,
 )
 
 
-@pytest.mark.xfail(reason=FUTURE_CONTRACT_REASON, strict=False)
 def test_packet_api_routes_are_not_intercepted_by_wrapper():
     nginx = NGINX_CONFIG.read_text(encoding="utf-8")
     for route in ("/api/recent_packets", "/api/bulk_packets", "/api/filtered_packets"):
@@ -19,32 +15,17 @@ def test_packet_api_routes_are_not_intercepted_by_wrapper():
     assert "proxy_pass http://127.0.0.1:8090" not in nginx
 
 
-@pytest.mark.xfail(reason=FUTURE_CONTRACT_REASON, strict=False)
-def test_analytics_routes_are_not_synthesized_by_wrapper():
-    compat = COMPAT_API.read_text(encoding="utf-8")
-    assert "/api/analytics/" not in compat
-    assert "build_topology" not in compat
-    assert "bucketed_stats" not in compat
+def test_analytics_routes_are_not_intercepted_by_wrapper():
+    nginx = NGINX_CONFIG.read_text(encoding="utf-8")
+    assert "location ^~ /api/analytics/" not in nginx
+    assert "proxy_pass http://127.0.0.1:8090" not in nginx
 
 
-@pytest.mark.xfail(reason=FUTURE_CONTRACT_REASON, strict=False)
-def test_wrapper_does_not_insert_packet_schema_fields():
-    compat = COMPAT_API.read_text(encoding="utf-8")
-    assert "packet_origin" not in compat
-    assert "route_type" not in compat
-    assert "payload_type" not in compat
+def test_compat_service_is_not_started_in_normal_operation():
+    assert not COMPAT_SERVICE_USER_ENTRY.exists()
+    assert not COMPAT_SERVICE_INGRESS_DEPENDENCY.exists()
 
 
-@pytest.mark.xfail(reason=FUTURE_CONTRACT_REASON, strict=False)
-def test_lbt_fields_are_not_wrapper_defaulted_or_selected_from_sqlite():
-    compat = COMPAT_API.read_text(encoding="utf-8")
-    assert "LBT_PACKET_COLUMNS" not in compat
-    assert "lbt_attempts" not in compat
-    assert "lbt_backoff_delays_ms" not in compat
-    assert "lbt_channel_busy" not in compat
-
-
-@pytest.mark.xfail(reason=FUTURE_CONTRACT_REASON, strict=False)
 def test_live_analytics_endpoint_is_not_faked_when_upstream_lacks_it(app):
     response = http_request(
         app.base_url,
@@ -63,7 +44,6 @@ def test_live_analytics_endpoint_is_not_faked_when_upstream_lacks_it(app):
     )
 
 
-@pytest.mark.xfail(reason=FUTURE_CONTRACT_REASON, strict=False)
 def test_live_packet_apis_do_not_return_wrapper_generated_bulk_metadata(app):
     response = http_request(
         app.base_url,
@@ -80,3 +60,17 @@ def test_live_packet_apis_do_not_return_wrapper_generated_bulk_metadata(app):
         and payload.get("success") is True
         and payload.get("compressed") is False
     )
+
+
+def test_normal_packet_path_cannot_insert_wrapper_telemetry_fields():
+    nginx = NGINX_CONFIG.read_text(encoding="utf-8")
+    assert "/api/recent_packets" not in nginx
+    assert "/api/bulk_packets" not in nginx
+    assert "/api/filtered_packets" not in nginx
+    assert not COMPAT_SERVICE_USER_ENTRY.exists()
+
+
+def test_normal_packet_path_cannot_default_lbt_fields_from_wrapper_sqlite():
+    nginx = NGINX_CONFIG.read_text(encoding="utf-8")
+    assert "127.0.0.1:8090" not in nginx
+    assert not COMPAT_SERVICE_USER_ENTRY.exists()

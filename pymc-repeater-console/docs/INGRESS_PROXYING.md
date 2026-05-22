@@ -9,9 +9,8 @@ Ingress adaptation is about getting the same browser request to the same upstrea
 - Home Assistant ingress target: `8080`
 - Direct wrapper access: `8000`
 - Upstream pyMC Repeater backend: `127.0.0.1:8001`
-- Local compatibility API: `127.0.0.1:8090`
 
-The `8090` compatibility API is not ingress transport adaptation. It serves local substitute API responses and is classified in the action plan as a violation when exposed under upstream-looking `/api/*` paths.
+The old `8090` compatibility API is no longer started or routed to in normal operation. It was not ingress transport adaptation and must not be reintroduced under upstream-looking `/api/*` paths.
 
 ## Valid Ingress Adaptations
 
@@ -130,11 +129,11 @@ Risk:
 
 Do not describe local substitute APIs as ingress support.
 
-Specifically:
+Before Phase 3 these routes were incorrectly served by local wrapper code. They now go through the default upstream proxy:
 
-- `/api/recent_packets` served by `console_compat_api.py` is API reimplementation.
-- `/api/bulk_packets` served by `console_compat_api.py` is API reimplementation.
-- `/api/filtered_packets` served by `console_compat_api.py` is API reimplementation.
-- `/api/analytics/*` served by `console_compat_api.py` is API reimplementation or synthetic analytics.
+- `/api/recent_packets`
+- `/api/bulk_packets`
+- `/api/filtered_packets`
+- `/api/analytics/*`
 
 The correct wrapper posture is to proxy upstream unchanged when upstream provides a route, or fail clearly when upstream does not.

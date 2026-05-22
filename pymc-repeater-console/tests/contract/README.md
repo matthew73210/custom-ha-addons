@@ -2,7 +2,7 @@
 
 These tests exercise the `pymc-repeater-console` wrapper contract. They are intended to detect upstream or wrapper breakage, not hide it with compatibility shims.
 
-Phase 2 does not change runtime behavior. Some tests document the desired Phase 3 wrapper-only API contract and are marked `xfail` while `console_compat_api.py` still serves upstream-looking API routes.
+Phase 3 removes normal-operation routing to `console_compat_api.py`. The API purity tests are now normal passing expectations: packet APIs proxy upstream unchanged, and analytics are not synthesized by the wrapper.
 
 ## Requirements
 
@@ -42,17 +42,16 @@ If the image needs real radio hardware or a site-specific config to stay running
 - `test_container_smoke.py`: container starts, HTTP routes become reachable, startup does not crash immediately, and build metadata exists when Docker access is available.
 - `test_routes.py`: Console, Repeater, helper scripts, duplicate `/api/api/*` normalization, and default proxy behavior.
 - `test_ingress_paths.py`: simulated Home Assistant ingress headers, helper assets, redirect prefix behavior, and WebSocket upgrade path behavior.
-- `test_upstream_api_contract.py`: current/future upstream API boundary checks. Expected Phase 3 failures are marked `xfail`.
+- `test_upstream_api_contract.py`: upstream API boundary checks that verify normal traffic does not reach the quarantined compatibility API.
 - `test_config_persistence.py`: persisted config preservation, one-time default creation, and removal of Home Assistant runtime option references from startup scripts.
 
-## Current `xfail` Tests
+## API Purity Tests
 
-The expected-future tests currently marked `xfail` cover:
+The API contract tests cover:
 
-- packet APIs should not be intercepted by `console_compat_api.py`;
-- analytics APIs should not be synthesized locally;
-- wrapper code should not insert/default packet telemetry fields;
-- LBT fields should come from upstream, not wrapper SQLite/default logic;
-- live analytics and bulk packet responses should not be wrapper-generated.
-
-When Phase 3 removes or quarantines the compat API behavior, remove the matching `xfail` markers and let these become normal passing contract tests.
+- packet APIs are not intercepted by `console_compat_api.py`;
+- analytics APIs are not routed to local synthetic handlers;
+- the compat API service is not started in normal operation;
+- wrapper code cannot insert/default packet telemetry fields through the normal packet path;
+- LBT fields, if present, come from upstream rather than wrapper SQLite/default logic;
+- live analytics and bulk packet responses do not show wrapper-generated compatibility payloads.
