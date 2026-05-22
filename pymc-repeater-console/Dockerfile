@@ -6,10 +6,10 @@ ARG BUILD_VERSION=0.2.16-dev
 ARG BUILD_ARCH=amd64
 # Tracks upstream dev for this dev app version because pymc_usb Wi-Fi/TCP
 # (`radio_type: pymc_tcp`) is merged there but is not in a tagged release yet.
+ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
 ARG PYMC_REPEATER_REF=dev
 ARG PYMC_CORE_REF=3987d3e8863bdf078bc9a9a7e3d29320028f49ee
 ARG PYMC_CONSOLE_REF=main
-ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
 ARG PYMC_CORE_REPO=https://github.com/pyMC-dev/pyMC_core.git
 ARG PYMC_CONSOLE_REPO=https://github.com/dmduran12/pymc_console-dist.git
 
@@ -78,12 +78,31 @@ RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
   && git fetch --depth 1 origin "${PYMC_REPEATER_REF}" \
   && git checkout --detach FETCH_HEAD \
   && echo "pyMC_Repeater resolved commit: $(git rev-parse HEAD)" \
+  && echo "pyMC_Repeater checkout diagnostics:" \
+  && git remote -v \
+  && git branch -a \
+  && git show --no-patch --oneline HEAD \
+  && git log -1 --decorate --oneline \
+  && git status \
+  && echo "Relevant source diagnostics:" \
+  && (grep -n "radio_type" repeater/config.py || true) \
+  && (grep -n "pymc_tcp" repeater/config.py || true) \
+  && (grep -n "pymc_usb" repeater/config.py || true) \
+  && (tail -40 repeater/config.py || true) \
+  && (cat pyproject.toml | grep -n "pymc_core" || true) \
   && echo "Verifying checked-out pyMC_Repeater source contains pymc_tcp runtime support" \
-  && check_paths="repeater pyproject.toml" \
-  && if [ -e setup.py ]; then check_paths="${check_paths} setup.py"; fi \
-  && if [ -e setup.cfg ]; then check_paths="${check_paths} setup.cfg"; fi \
-  && if ! grep -R "pymc_tcp" -n ${check_paths} 2>/dev/null; then \
-       echo "ERROR: checked-out pyMC_Repeater source does not contain pymc_tcp support"; \
+  && if ! grep -q 'radio_type == "pymc_tcp"' repeater/config.py; then \
+       echo "ERROR: checked-out pyMC_Repeater does not support radio_type=pymc_tcp"; \
+       echo "Remote:"; \
+       git remote -v; \
+       echo "HEAD:"; \
+       git show --no-patch --oneline HEAD; \
+       echo "Available remote refs:"; \
+       git ls-remote --heads origin || true; \
+       echo "Relevant config.py matches:"; \
+       grep -n "radio_type" repeater/config.py || true; \
+       grep -n "pymc" repeater/config.py || true; \
+       tail -80 repeater/config.py || true; \
        exit 1; \
      fi \
   && echo "Wrapper policy: not running upstream manage.sh or other install scripts; installing Python package directly."
@@ -103,10 +122,10 @@ import inspect
 import repeater.config as config
 
 src = inspect.getsource(config)
-if "pymc_tcp" not in src:
-    raise SystemExit("ERROR: installed repeater.config does not contain pymc_tcp support")
+if 'radio_type == "pymc_tcp"' not in src:
+    raise SystemExit("ERROR: installed repeater.config does not contain pymc_tcp radio_type support")
 
-print("OK: installed repeater.config contains pymc_tcp support")
+print("OK: installed repeater.config supports radio_type=pymc_tcp")
 print("repeater.config path:", config.__file__)
 PY
 
