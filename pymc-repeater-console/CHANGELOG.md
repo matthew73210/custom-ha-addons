@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.21-dev
+
+- Added the Phase 2 contract test suite for container smoke checks, route/proxy checks, ingress-style path checks, upstream API contract expectations, and config persistence.
+- Marked current/future API wrapper-boundary expectations as `xfail` while the existing compatibility API remains in place.
+- No runtime behavior, ingress routing, compat API behavior, or config authority changed.
+
 ## 0.2.18-dev
 
 - Removed Home Assistant runtime options that duplicated pyMC Repeater config.

@@ -111,6 +111,14 @@ The wrapper may assume only documented upstream behavior. Contract tests should 
 - Configurable ports work.
 - Direct access and ingress-style access both route correctly.
 
+Phase 2 adds the local contract test suite under:
+
+```text
+pymc-repeater-console/tests/contract
+```
+
+The suite can run against supplied direct/ingress URLs or start a Docker image when `PYMC_REPEATER_CONSOLE_IMAGE` is provided. Current-state route and config tests are normal tests. Future API-purity expectations for known Phase 3 violations are marked `xfail` so the suite documents the desired contract without changing runtime behavior.
+
 ## Failure Policy
 
 When upstream changes break the wrapper contract:

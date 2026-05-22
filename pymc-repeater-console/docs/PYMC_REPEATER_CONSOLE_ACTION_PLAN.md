@@ -113,19 +113,14 @@ Deliverable: reproducible release builds and visible upstream version metadata.
 
 Goal: detect upstream breakage instead of hiding it.
 
-- Add smoke tests for container start.
-- Add tests for Console route `/`.
-- Add tests for Repeater route `/repeater/`.
-- Add tests for static assets under direct and ingress-style paths.
-- Add WebSocket forwarding tests for `/ws/packets` and `/ws/companion_frame`.
-- Add config persistence tests for `/config/pymc-repeater`.
-- Add configurable port tests.
-- Add direct `8000` vs ingress `8080` routing tests.
-- Add tests proving API routes are either transparently proxied to upstream or clearly documented wrapper-owned diagnostics.
-- Add tests that `/api/recent_packets` is available only when upstream provides it.
-- Add tests that packet schema and LBT fields come from upstream, not wrapper defaults.
+- Added smoke tests for container start and HTTP readiness in `tests/contract/test_container_smoke.py`.
+- Added route tests for Console `/`, Repeater `/repeater/`, helper scripts, `/api/api/*` normalization, and default proxy behavior.
+- Added ingress-style tests for `X-Ingress-Path`, helper assets, redirects, and WebSocket upgrade path behavior.
+- Added config persistence tests for preserving existing config, one-time default creation, removed option references, and missing `options:`/`schema:`.
+- Added upstream API contract tests documenting current Phase 3 violations as `xfail`.
+- Configurable port coverage currently comes from direct `8000` vs ingress `8080` URL selection through environment variables.
 
-Deliverable: contract suite that fails when upstream changes break wrapper assumptions.
+Deliverable: contract suite that fails when current wrapper routing/config assumptions break, with future API purity checks marked `xfail` until Phase 3.
 
 ### Phase 3 - Remove or quarantine fork-like behavior
 
