@@ -4,9 +4,9 @@ FROM ${BUILD_FROM}
 
 ARG BUILD_VERSION=0.2.16-dev
 ARG BUILD_ARCH=amd64
-# Pinned to upstream dev because pymc_usb Wi-Fi/TCP (`radio_type: pymc_tcp`)
-# is not in a tagged pyMC_Repeater release or upstream main yet.
-ARG PYMC_REPEATER_REF=8f3477ddd6fa879368dad99e18b258770bdeb380
+# Tracks upstream dev for this dev app version because pymc_usb Wi-Fi/TCP
+# (`radio_type: pymc_tcp`) is merged there but is not in a tagged release yet.
+ARG PYMC_REPEATER_REF=dev
 ARG PYMC_CORE_REF=3987d3e8863bdf078bc9a9a7e3d29320028f49ee
 ARG PYMC_CONSOLE_REF=main
 ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
@@ -78,9 +78,14 @@ RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
   && git fetch --depth 1 origin "${PYMC_REPEATER_REF}" \
   && git checkout --detach FETCH_HEAD \
   && echo "pyMC_Repeater resolved commit: $(git rev-parse HEAD)" \
-  && echo "Verifying checked-out pyMC_Repeater source contains pymc_tcp support" \
-  && grep -n "pymc_tcp" repeater/config.py \
-  && grep -n "pymc_tcp" config.yaml.example \
+  && echo "Verifying checked-out pyMC_Repeater source contains pymc_tcp runtime support" \
+  && check_paths="repeater pyproject.toml" \
+  && if [ -e setup.py ]; then check_paths="${check_paths} setup.py"; fi \
+  && if [ -e setup.cfg ]; then check_paths="${check_paths} setup.cfg"; fi \
+  && if ! grep -R "pymc_tcp" -n ${check_paths} 2>/dev/null; then \
+       echo "ERROR: checked-out pyMC_Repeater source does not contain pymc_tcp support"; \
+       exit 1; \
+     fi \
   && echo "Wrapper policy: not running upstream manage.sh or other install scripts; installing Python package directly."
 
 RUN python3 -m venv --system-site-packages /opt/venv \
@@ -89,11 +94,32 @@ RUN python3 -m venv --system-site-packages /opt/venv \
   && pip install --no-cache-dir --force-reinstall "pymc_core[hardware] @ git+${PYMC_CORE_REPO}@${PYMC_CORE_REF}" \
   && python3 -m pip show pymc-repeater \
   && python3 -m pip show pymc-core \
-  && cd / \
-  && python3 -c 'import inspect; from repeater.config import get_radio_for_board; import repeater.config as c; src = inspect.getsource(c); assert "pymc_tcp" in src, "Installed pyMC_Repeater does not contain pymc_tcp support"; print("pymc_tcp support present in installed repeater.config:", c.__file__)' \
-  && python3 -c 'from pymc_core.hardware.tcp_radio import TCPLoRaRadio; print("TCPLoRaRadio import OK:", TCPLoRaRadio)' \
   && mkdir -p /usr/share/licenses/pymc-repeater \
   && cp "${INSTALL_DIR}/LICENSE" /usr/share/licenses/pymc-repeater/LICENSE
+
+RUN cd / \
+  && python3 - <<'PY'
+import inspect
+import repeater.config as config
+
+src = inspect.getsource(config)
+if "pymc_tcp" not in src:
+    raise SystemExit("ERROR: installed repeater.config does not contain pymc_tcp support")
+
+print("OK: installed repeater.config contains pymc_tcp support")
+print("repeater.config path:", config.__file__)
+PY
+
+RUN cd / \
+  && python3 - <<'PY'
+try:
+    from pymc_core.hardware.tcp_radio import TCPLoRaRadio
+except Exception as exc:
+    raise SystemExit(f"ERROR: installed pyMC_core lacks TCPLoRaRadio: {exc}") from exc
+
+print("OK: installed pyMC_core has TCPLoRaRadio")
+print("TCPLoRaRadio:", TCPLoRaRadio)
+PY
 
 RUN echo "Copying original pyMC_Repeater web assets without patching upstream files" \
   && mkdir -p "${ORIGINAL_WEB_DIR}" \
