@@ -154,7 +154,7 @@ Goal: make CI explain whether the wrapper or upstream changed.
 
 - Release workflow builds and publishes pinned refs only.
 - CI validates wrapper source, metadata, config-file-only add-on settings, forbidden compat API routing, removed minified rewrite patterns, and Dockerfile parsing.
-- CI builds an amd64 pinned image and runs the contract suite against it.
+- CI builds an amd64 pinned image and runs the contract suite against it with a CI-safe persisted config fixture using upstream-accepted `radio_type: none`; this avoids requiring `/dev/gpiochip0` while preserving the real runtime `sx1262` guard.
 - Scheduled/manual candidate workflow tests configurable upstream candidate refs without publishing release images.
 - Candidate refs use `PYMC_REPEATER_CANDIDATE_REF` and `PYMC_CONSOLE_CANDIDATE_REF`; `main` may be the default, but `dev` or feature branches are supported while upstream work such as `pymc_usb` is pending.
 - CI failure text distinguishes wrapper validation failures, pinned upstream build/test failures, and upstream candidate drift or contract changes.

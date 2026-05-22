@@ -51,6 +51,7 @@ jobs:
         run: |
           ruby -ryaml -e 'ARGV.each { |p| YAML.load_file(p); puts "YAML ok: #{p}" }' \
             "${ADDON_DIR}/config.yaml" \
+            "${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml" \
             ".github/workflows/build-pymc-repeater-console.yml"
           ruby -rjson -e 'ARGV.each { |p| JSON.parse(File.read(p)); puts "JSON ok: #{p}" }' \
             "repository.json" \
@@ -124,6 +125,32 @@ jobs:
                   raise SystemExit(f"Forbidden Home Assistant runtime option is present in config.yaml: {key}")
           print("OK: config.yaml has no Home Assistant runtime options/schema")
           PY
+
+      - name: Check runtime guard and CI contract fixture
+        run: |
+          guard="${ADDON_DIR}/rootfs/etc/cont-init.d/pymc-repeater.sh"
+          fixture="${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml"
+          if ! grep -q 'radio_type == "sx1262"' "${guard}"; then
+            echo "ERROR: sx1262 runtime guard is missing"
+            exit 1
+          fi
+          if ! grep -q "/dev/gpiochip0" "${guard}"; then
+            echo "ERROR: sx1262 /dev/gpiochip0 guard is missing"
+            exit 1
+          fi
+          if ! grep -q "Configured radio_type=sx1262 requires /dev/gpiochip0" "${guard}"; then
+            echo "ERROR: expected sx1262 fatal message is missing"
+            exit 1
+          fi
+          if grep -q "radio_type: sx1262" "${fixture}"; then
+            echo "ERROR: CI contract fixture must not use hardware sx1262"
+            exit 1
+          fi
+          if ! grep -q "radio_type: none" "${fixture}"; then
+            echo "ERROR: CI contract fixture should use upstream-accepted no-radio mode"
+            exit 1
+          fi
+          echo "OK: runtime guard remains, CI fixture is non-GPIO"
 
       - name: Check forbidden compat API routing is absent
         run: |
@@ -216,14 +243,32 @@ jobs:
             -f "${ADDON_DIR}/Dockerfile" \
             "${ADDON_DIR}"
 
+      - name: Create CI-safe contract config fixture
+        id: contract_config
+        run: |
+          config_dir="${RUNNER_TEMP}/pymc-contract-config"
+          mkdir -p "${config_dir}/pymc-repeater"
+          cp "${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml" "${config_dir}/pymc-repeater/config.yaml"
+          ruby -ryaml -e 'YAML.load_file(ARGV.fetch(0)); puts "YAML ok: #{ARGV.fetch(0)}"' "${config_dir}/pymc-repeater/config.yaml"
+          if grep -q "radio_type: sx1262" "${config_dir}/pymc-repeater/config.yaml"; then
+            echo "ERROR: CI contract config must not use hardware sx1262"
+            exit 1
+          fi
+          echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
+          echo "CI contract config: ${config_dir}/pymc-repeater/config.yaml"
+
       - name: Show pinned upstream build metadata
         run: |
-          docker run --rm pymc-repeater-console:contract-pinned \
-            python3 -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
+          docker run --rm \
+            -v "${{ steps.contract_config.outputs.config_dir }}:/config:ro" \
+            --entrypoint python3 \
+            pymc-repeater-console:contract-pinned \
+            -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
 
       - name: Run live contract tests against pinned image
         env:
           PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-pinned
+          PYMC_REPEATER_CONSOLE_CONFIG_DIR: ${{ steps.contract_config.outputs.config_dir }}
           PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
         run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
 
@@ -375,14 +420,32 @@ jobs:
             -f "${ADDON_DIR}/Dockerfile" \
             "${ADDON_DIR}"
 
+      - name: Create CI-safe candidate contract config fixture
+        id: candidate_config
+        run: |
+          config_dir="${RUNNER_TEMP}/pymc-candidate-contract-config"
+          mkdir -p "${config_dir}/pymc-repeater"
+          cp "${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml" "${config_dir}/pymc-repeater/config.yaml"
+          ruby -ryaml -e 'YAML.load_file(ARGV.fetch(0)); puts "YAML ok: #{ARGV.fetch(0)}"' "${config_dir}/pymc-repeater/config.yaml"
+          if grep -q "radio_type: sx1262" "${config_dir}/pymc-repeater/config.yaml"; then
+            echo "ERROR: candidate contract config must not use hardware sx1262"
+            exit 1
+          fi
+          echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
+          echo "Candidate contract config: ${config_dir}/pymc-repeater/config.yaml"
+
       - name: Show upstream candidate build metadata
         run: |
-          docker run --rm pymc-repeater-console:contract-candidate \
-            python3 -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
+          docker run --rm \
+            -v "${{ steps.candidate_config.outputs.config_dir }}:/config:ro" \
+            --entrypoint python3 \
+            pymc-repeater-console:contract-candidate \
+            -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
 
       - name: Run contract tests against upstream candidate
         env:
           PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-candidate
+          PYMC_REPEATER_CONSOLE_CONFIG_DIR: ${{ steps.candidate_config.outputs.config_dir }}
           PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
         run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
 

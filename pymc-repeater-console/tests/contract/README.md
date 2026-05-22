@@ -19,6 +19,7 @@ The tests do not require Home Assistant Supervisor. Ingress behavior is simulate
 - `PYMC_REPEATER_CONSOLE_INGRESS_BASE_URL`: ingress-compatible URL, usually port `8080`; defaults to `PYMC_REPEATER_CONSOLE_BASE_URL`.
 - `PYMC_REPEATER_CONSOLE_SKIP_DOCKER`: when truthy, skip Docker startup if no base URL is provided.
 - `PYMC_REPEATER_CONSOLE_TEST_TIMEOUT`: startup and request timeout in seconds; default is `60`.
+- `PYMC_REPEATER_CONSOLE_CONFIG_DIR`: optional host config directory to mount as `/config` when tests start Docker.
 
 CI candidate-drift jobs also use upstream ref variables outside the pytest process:
 
@@ -40,7 +41,9 @@ PYMC_REPEATER_CONSOLE_IMAGE=pymc-repeater-console:local \
 python3 -m pytest pymc-repeater-console/tests/contract
 ```
 
-If the image needs real radio hardware or a site-specific config to stay running, prefer the running-container form above.
+When tests start Docker themselves, they create or use a persisted config under `/config/pymc-repeater/config.yaml`. The default test fixture is `tests/contract/fixtures/ci-safe-config.yaml`, which uses upstream-accepted `radio_type: none` so CI does not require GPIO, USB, serial, or TCP radio hardware.
+
+The production first-run default still uses `radio_type: sx1262`; the startup guard that fails when `/dev/gpiochip0` is unavailable is intentional runtime behavior. Contract tests distinguish that runtime guard from CI startup by checking that the guard remains present while CI fixtures do not use `radio_type: sx1262`.
 
 ## Test Groups
 

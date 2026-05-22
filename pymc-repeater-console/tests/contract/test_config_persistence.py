@@ -6,7 +6,7 @@ import sys
 import types
 from pathlib import Path
 
-from helpers import ADDON_ROOT, CONT_INIT_SCRIPT
+from helpers import ADDON_ROOT, CI_SAFE_CONFIG, CONT_INIT_SCRIPT
 
 
 REMOVED_HA_OPTION_REFERENCES = {
@@ -192,3 +192,17 @@ def test_addon_config_has_no_home_assistant_runtime_options_or_schema():
     assert "\nschema:" not in config_yaml
     for option_key in OLD_HOME_ASSISTANT_RUNTIME_OPTIONS:
         assert f"{option_key}:" not in config_yaml
+
+
+def test_sx1262_gpio_runtime_guard_remains_in_startup_script():
+    startup_text = CONT_INIT_SCRIPT.read_text(encoding="utf-8")
+    assert 'radio_type == "sx1262"' in startup_text
+    assert 'gpiochip == "/dev/gpiochip0"' in startup_text
+    assert "Configured radio_type=sx1262 requires /dev/gpiochip0" in startup_text
+
+
+def test_ci_safe_contract_config_does_not_use_sx1262_default():
+    config_yaml = CI_SAFE_CONFIG.read_text(encoding="utf-8")
+    assert "radio_type: sx1262" not in config_yaml
+    assert "radio_type: none" in config_yaml
+    assert "/dev/gpiochip0" not in config_yaml

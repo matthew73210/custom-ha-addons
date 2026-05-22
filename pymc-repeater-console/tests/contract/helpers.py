@@ -30,6 +30,7 @@ COMPAT_SERVICE_INGRESS_DEPENDENCY = (
     ADDON_ROOT
     / "rootfs/etc/s6-overlay/s6-rc.d/pymc-repeater-ingress/dependencies.d/pymc-console-compat-api"
 )
+CI_SAFE_CONFIG = ADDON_ROOT / "tests/contract/fixtures/ci-safe-config.yaml"
 
 
 @dataclass(frozen=True)

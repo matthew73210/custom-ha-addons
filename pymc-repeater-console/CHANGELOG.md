@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.28-dev
+
+- Fixed pinned and candidate contract-test CI startup by using a CI-safe persisted config fixture with upstream-accepted `radio_type: none`.
+- Kept the real runtime `sx1262` `/dev/gpiochip0` guard intact and added contract checks for it.
+- Updated contract tests and workflow checks to prove CI fixtures do not boot with the hardware `sx1262` default.
+- No runtime guard, production default config generation, ingress routing, compat API, or upstream source behavior changed.
+
 ## 0.2.27-dev
 
 - Documented pymc-usb-compatible transport modes: local USB serial through `radio_type: pymc_usb` and remote TCP/IP through upstream `radio_type: pymc_tcp`.
