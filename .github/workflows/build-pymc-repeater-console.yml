@@ -18,7 +18,7 @@ permissions:
 env:
   ADDON_DIR: pymc-repeater-console
   IMAGE_OWNER: matthew73210
-  PYMC_REPEATER_REF: main
+  PYMC_REPEATER_REF: dev
   PYMC_CONSOLE_REF: main
 
 jobs:
@@ -69,6 +69,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show upstream refs
+        run: |
+          echo "Workflow PYMC_REPEATER_REF=${PYMC_REPEATER_REF}"
 
       - name: Build and push add-on image
         uses: docker/build-push-action@v7
