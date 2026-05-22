@@ -76,7 +76,7 @@ Classification rules:
 | Hardcoded minified bundle rewrites | `pymc-repeater-ingress.conf` | Rewrites minified React/router snippets such as `history:r(...)` and `F.jsx(E7,...)`. | Suspicious | Depends on fragile upstream build internals and may silently break on upstream releases. | Remove where possible. Replace with path-level proxying or fail-fast contract tests. | High | Yes, in Phase 4 |
 | Carto map same-origin proxy | `pymc-repeater-ingress.conf` | Proxies Carto basemap and tile JSON and rewrites embedded URLs. | Suspicious | Mutates third-party JSON, though for browser same-origin/ingress transport. | Keep only if required; document as non-upstream transport exception and test it. | Medium | Maybe in Phase 4 |
 | Startup storage diagnostics | `rootfs/etc/s6-overlay/s6-rc.d/pymc-repeater/run` | Reads config and SQLite counts for logs only. | OK diagnostics | Does not serve upstream-looking API responses or alter behavior. | Keep as diagnostics; ensure secrets remain redacted. | Low | No |
-| Moving upstream refs | `Dockerfile`, `.github/workflows/build-pymc-repeater-console.yml` | Release builds use `main` for pyMC Repeater and Console. | Suspicious release process | Releases are not reproducible and upstream changes can land silently. | Pin release builds to known-good commit SHAs. Use scheduled CI for upstream `main`. | High | Build behavior only |
+| Upstream release refs | `Dockerfile`, `.github/workflows/build-pymc-repeater-console.yml` | Dockerfile default refs are pinned to known-good candidate SHAs; workflows can still override refs for dev/testing. | OK with remaining CI follow-up | Default builds are reproducible, while future scheduled CI should still test upstream drift separately. | Keep pinned defaults. Add scheduled upstream-main CI in Phase 5. | Medium | Build behavior only |
 | Missing contract tests | `tests/contract/` | No contract test suite exists. | Suspicious process gap | Wrapper purity relies on manual inspection. | Add container and route tests proving transparent proxying and clear failures. | High | No direct runtime change |
 
 ## 4. Priority Order
@@ -99,10 +99,12 @@ Deliverable: documentation and metadata only.
 
 Goal: make releases reproducible and upstream drift visible.
 
-- Pin release builds to known-good upstream SHAs.
-- Record resolved upstream SHAs in build logs.
-- Add OCI labels for upstream repo, requested ref, and resolved SHA.
-- Add startup log showing upstream versions/SHAs.
+- Pin release/default builds to known-good upstream SHAs.
+- Preserve manual build-arg overrides for dev/testing.
+- Record requested refs and resolved upstream SHAs in build logs.
+- Add OCI labels for upstream repo, requested ref, and the metadata-file path.
+- Store resolved SHAs and Console version in `/usr/share/pymc-repeater-console/upstream-build-info.json` because Docker labels cannot truthfully receive values discovered inside `RUN` steps.
+- Add startup log showing upstream requested refs, resolved SHAs, and Console version.
 - Add a diagnostics endpoint only if it is clearly wrapper-owned, does not shadow an upstream route, and does not alter upstream behavior.
 
 Deliverable: reproducible release builds and visible upstream version metadata.
@@ -168,7 +170,7 @@ Deliverable: CI that protects wrapper purity and upstream contract visibility.
 - Should `console_compat_api.py` be removed immediately, or kept temporarily behind explicit compatibility mode?
 - If compatibility mode exists temporarily, should it default to off? Recommended answer: **yes, default off**.
 - Should analytics pages be disabled or clearly marked unsupported if upstream does not provide analytics APIs? Recommended answer: **yes**.
-- Should releases pin upstream commits while dev builds follow `main`? Recommended answer: **yes; releases pin SHAs, scheduled/dev tests may follow main**.
+- Should releases pin upstream commits while dev builds can test `main`? Current answer: **yes; Dockerfile defaults pin SHAs, manual dev builds and future scheduled CI may override refs to test upstream drift**.
 - Which ingress rewrites are strictly transport-only?
   - Path prefix joins for fetch, XHR, EventSource, WebSocket, Worker, static assets.
   - `X-Forwarded-*`, `X-Ingress-Path`, cookie path, and redirect path adaptation.
@@ -223,8 +225,8 @@ Done means:
 - `/api/recent_packets`, `/api/bulk_packets`, and `/api/filtered_packets` are proxied to upstream when upstream provides them.
 - `/api/analytics/*` is not faked when upstream does not provide it.
 - Auth behavior for proxied upstream APIs remains upstream auth behavior.
-- Upstream refs are pinned for release builds.
-- Scheduled CI tests upstream `main` without publishing release images.
+- Upstream refs are pinned for release/default builds.
+- Scheduled CI tests upstream `main` without publishing release images once Phase 5 is implemented.
 - Contract tests pass.
 - Known-good upstream versions are recorded.
 - The action plan and supporting docs clearly distinguish ingress proxying from API reimplementation.

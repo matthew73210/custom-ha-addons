@@ -18,9 +18,9 @@ pyMC Console dist:
 - GitHub slug: `dmduran12/pymc_console-dist`
 - Build argument: `PYMC_CONSOLE_REF`
 
-Known-good candidate refs are recorded in `compatibility/known-good-upstreams.json`.
+Current pinned release defaults and known-good candidate refs are recorded in `compatibility/known-good-upstreams.json`.
 
-## Known-Good Candidates
+## Current Pinned Release Defaults
 
 Observed during wrapper review on 2026-05-20:
 
@@ -28,7 +28,7 @@ Observed during wrapper review on 2026-05-20:
 - pyMC Console dist: `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 - pyMC Console dist version: `0.9.329`
 
-These are known-good candidates, not guaranteed release pins yet. They become release-quality known-good refs only after contract tests prove the wrapper routes, static assets, WebSocket forwarding, config persistence, direct access, and ingress-style access still satisfy the wrapper contract.
+These SHAs are now the Dockerfile default refs for release/default builds. They remain known-good candidates rather than fully contract-tested refs until contract tests prove the wrapper routes, static assets, WebSocket forwarding, config persistence, direct access, and ingress-style access still satisfy the wrapper contract.
 
 ## Release Policy
 
@@ -39,7 +39,7 @@ Release builds should pin upstream commit SHAs:
 
 Release builds should not float on upstream `main` or another moving branch.
 
-Development and scheduled CI may test upstream `main`, but those jobs should:
+Development builds may override refs manually with Docker build args. Scheduled CI against upstream `main` is a later phase unless implemented separately, and those jobs should:
 
 - Avoid publishing release images.
 - Report failures as upstream drift unless wrapper code changed.
@@ -56,24 +56,29 @@ Build logs should record:
 - Build architecture.
 - pyMC Console dist version when available.
 
-Future image labels should include:
+Current image labels include requested upstream repos/refs and a pointer to the build metadata file:
 
 - `org.opencontainers.image.pymc_repeater.repo`
 - `org.opencontainers.image.pymc_repeater.ref`
-- `org.opencontainers.image.pymc_repeater.revision`
 - `org.opencontainers.image.pymc_console.repo`
 - `org.opencontainers.image.pymc_console.ref`
-- `org.opencontainers.image.pymc_console.revision`
-- `org.opencontainers.image.pymc_console.version`
+- `org.opencontainers.image.pymc_upstream_metadata`
+
+Resolved SHAs and Console version are written to:
+
+```text
+/usr/share/pymc-repeater-console/upstream-build-info.json
+```
+
+Docker labels cannot be populated from values discovered inside a `RUN` step without passing those resolved values back into the build from outside Docker. The wrapper must not fake resolved-SHA labels. Use the metadata file as the source of truth for resolved upstream SHAs.
 
 ## Startup Metadata
 
-Startup logs may expose upstream version metadata if it does not alter runtime behavior:
+Startup logs expose upstream version metadata from `/usr/share/pymc-repeater-console/upstream-build-info.json` without changing runtime behavior:
 
-- pyMC Repeater package version if available.
-- pyMC Repeater resolved SHA if recorded at build time.
-- pyMC Console dist version if available.
-- pyMC Console resolved SHA if recorded at build time.
+- pyMC Repeater requested ref and resolved SHA.
+- pyMC Console dist requested ref and resolved SHA.
+- pyMC Console dist version.
 
 Diagnostics are acceptable only under a wrapper-owned namespace and only if they do not shadow upstream routes or change upstream behavior.
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 CONFIG_PATH="/etc/pymc_repeater/config.yaml"
+UPSTREAM_METADATA_PATH="/usr/share/pymc-repeater-console/upstream-build-info.json"
 PYTHON_BIN="/opt/venv/bin/python3"
 BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8001"
@@ -258,6 +259,41 @@ PY
   )
 }
 
+log_upstream_metadata() {
+  if [ ! -f "${UPSTREAM_METADATA_PATH}" ]; then
+    bashio::log.warning "Upstream build metadata not found at ${UPSTREAM_METADATA_PATH}."
+    return 0
+  fi
+
+  "${PYTHON_BIN}" - "${UPSTREAM_METADATA_PATH}" <<'PY' | while IFS= read -r line; do bashio::log.info "upstream | ${line}"; done
+import json
+import pathlib
+import sys
+
+metadata_path = pathlib.Path(sys.argv[1])
+try:
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"unable to read {metadata_path}: {exc}")
+    raise SystemExit(0)
+
+repeater = metadata.get("pymc_repeater") or {}
+console = metadata.get("pymc_console_dist") or {}
+
+print(
+    "pyMC Repeater requested_ref="
+    f"{repeater.get('requested_ref', 'unknown')} "
+    f"resolved_sha={repeater.get('resolved_sha', 'unknown')}"
+)
+print(
+    "pyMC Console dist requested_ref="
+    f"{console.get('requested_ref', 'unknown')} "
+    f"resolved_sha={console.get('resolved_sha', 'unknown')} "
+    f"version={console.get('version') or 'unknown'}"
+)
+PY
+}
+
 wait_for_probe() {
   local label="$1"
   local command_name="$2"
@@ -318,6 +354,7 @@ halt_addon() {
 bashio::log.info "Selected internal backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
 bashio::log.info "Selected direct wrapper entrypoint: http://${DIRECT_HOST}:${DIRECT_PORT}"
 bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
+log_upstream_metadata
 if [ "${DEBUG_LOG}" = "true" ]; then
   log_redacted_config
 fi

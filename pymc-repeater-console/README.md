@@ -9,13 +9,14 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 
 Current upstream build refs:
 
-- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `dev`
+- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `a36cb6af44ab63247dd6d0f414afc6e53de18012`
 - pyMC_core repo/ref: `https://github.com/pyMC-dev/pyMC_core.git` / `3987d3e8863bdf078bc9a9a7e3d29320028f49ee`
-- pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `main`
+- pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
+- pyMC Console dist version: `0.9.329`
 
-The Docker build logs the resolved commit SHA for each upstream ref and fails if the installed runtime package does not contain `pymc_tcp` support. The refs remain configurable with `PYMC_REPEATER_REF`, `PYMC_CORE_REF`, and `PYMC_CONSOLE_REF` build arguments.
+The Docker build logs the requested ref and resolved commit SHA for each upstream ref, writes `/usr/share/pymc-repeater-console/upstream-build-info.json`, and fails clearly if a requested ref cannot be resolved. The refs remain configurable with `PYMC_REPEATER_REF`, `PYMC_CORE_REF`, and `PYMC_CONSOLE_REF` build arguments for dev/testing.
 
-Compatibility note: this dev app version intentionally tracks upstream pyMC_Repeater `dev` because `pymc_usb` Wi-Fi/TCP modem support is merged there but is not yet present in a tagged/released pyMC_Repeater version. This is not release-stable pinning. The Wi-Fi modem path uses upstream `radio_type: pymc_tcp`. The `pymc_usb` firmware exposes its TCP modem protocol on port `5055` by default; it is not KISS, UDP, WebSocket, HTTP radio control, or serial-over-Wi-Fi. This wrapper creates a default upstream config only when no persisted config exists and does not add a protocol bridge or compatibility shim.
+Compatibility note: release/default builds now use pinned upstream SHAs instead of moving branches. The Wi-Fi modem path uses upstream `radio_type: pymc_tcp`. The `pymc_usb` firmware exposes its TCP modem protocol on port `5055` by default; it is not KISS, UDP, WebSocket, HTTP radio control, or serial-over-Wi-Fi. This wrapper creates a default upstream config only when no persisted config exists and does not add a protocol bridge or compatibility shim.
 
 ## Installation
 

@@ -4,12 +4,11 @@ FROM ${BUILD_FROM}
 
 ARG BUILD_VERSION=0.2.18-dev
 ARG BUILD_ARCH=amd64
-# Tracks upstream dev for this dev app version because pymc_usb Wi-Fi/TCP
-# (`radio_type: pymc_tcp`) is merged there but is not in a tagged release yet.
+ARG BUILD_DATE=
 ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
-ARG PYMC_REPEATER_REF=dev
+ARG PYMC_REPEATER_REF=a36cb6af44ab63247dd6d0f414afc6e53de18012
 ARG PYMC_CORE_REF=3987d3e8863bdf078bc9a9a7e3d29320028f49ee
-ARG PYMC_CONSOLE_REF=main
+ARG PYMC_CONSOLE_REF=2d961cef1ae1a355eb06e34fba99788d9ffca44a
 ARG PYMC_CORE_REPO=https://github.com/pyMC-dev/pyMC_core.git
 ARG PYMC_CONSOLE_REPO=https://github.com/dmduran12/pymc_console-dist.git
 
@@ -36,6 +35,7 @@ LABEL \
   org.opencontainers.image.pymc_core.ref="${PYMC_CORE_REF}" \
   org.opencontainers.image.pymc_console.repo="${PYMC_CONSOLE_REPO}" \
   org.opencontainers.image.pymc_console.ref="${PYMC_CONSOLE_REF}" \
+  org.opencontainers.image.pymc_upstream_metadata="/usr/share/pymc-repeater-console/upstream-build-info.json" \
   org.opencontainers.image.description="Home Assistant add-on wrapper for pyMC Repeater with pyMC Console"
 
 RUN echo "Building pyMC Repeater + Console add-on wrapper version: ${BUILD_VERSION}" \
@@ -72,12 +72,16 @@ RUN echo "Building pyMC Repeater + Console add-on wrapper version: ${BUILD_VERSI
 WORKDIR ${INSTALL_DIR}
 
 RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
-  && echo "Cloning pyMC_Repeater ref: ${PYMC_REPEATER_REF}" \
+  && echo "Requested pyMC_Repeater ref: ${PYMC_REPEATER_REF}" \
   && git init . \
   && git remote add origin "${PYMC_REPEATER_REPO}" \
-  && git fetch --depth 1 origin "${PYMC_REPEATER_REF}" \
+  && if ! git fetch --depth 1 origin "${PYMC_REPEATER_REF}"; then \
+       echo "ERROR: unable to resolve pyMC_Repeater ref ${PYMC_REPEATER_REF} from ${PYMC_REPEATER_REPO}"; \
+       exit 1; \
+     fi \
   && git checkout --detach FETCH_HEAD \
-  && echo "pyMC_Repeater resolved commit: $(git rev-parse HEAD)" \
+  && git rev-parse HEAD > /tmp/pymc_repeater_resolved_sha \
+  && echo "Resolved pyMC_Repeater commit SHA: $(cat /tmp/pymc_repeater_resolved_sha)" \
   && echo "pyMC_Repeater checkout diagnostics:" \
   && git remote -v \
   && git branch -a \
@@ -147,14 +151,67 @@ RUN echo "Copying original pyMC_Repeater web assets without patching upstream fi
   && echo "Original web path: ${ORIGINAL_WEB_DIR}"
 
 RUN echo "Cloning pyMC Console dist repo: ${PYMC_CONSOLE_REPO}" \
-  && echo "Cloning pyMC Console dist ref: ${PYMC_CONSOLE_REF}" \
-  && git clone --depth 1 --branch "${PYMC_CONSOLE_REF}" "${PYMC_CONSOLE_REPO}" /tmp/pymc_console-dist \
-  && echo "pyMC Console dist resolved commit: $(git -C /tmp/pymc_console-dist rev-parse HEAD)" \
+  && echo "Requested pyMC Console dist ref: ${PYMC_CONSOLE_REF}" \
+  && mkdir -p /tmp/pymc_console-dist \
+  && git -C /tmp/pymc_console-dist init . \
+  && git -C /tmp/pymc_console-dist remote add origin "${PYMC_CONSOLE_REPO}" \
+  && if ! git -C /tmp/pymc_console-dist fetch --depth 1 origin "${PYMC_CONSOLE_REF}"; then \
+       echo "ERROR: unable to resolve pyMC Console dist ref ${PYMC_CONSOLE_REF} from ${PYMC_CONSOLE_REPO}"; \
+       exit 1; \
+     fi \
+  && git -C /tmp/pymc_console-dist checkout --detach FETCH_HEAD \
+  && git -C /tmp/pymc_console-dist rev-parse HEAD > /tmp/pymc_console_resolved_sha \
+  && if [ -f /tmp/pymc_console-dist/frontend/dist/VERSION ]; then cat /tmp/pymc_console-dist/frontend/dist/VERSION > /tmp/pymc_console_version; else printf '' > /tmp/pymc_console_version; fi \
+  && echo "Resolved pyMC Console dist commit SHA: $(cat /tmp/pymc_console_resolved_sha)" \
+  && if [ -s /tmp/pymc_console_version ]; then echo "pyMC Console dist version: $(cat /tmp/pymc_console_version)"; else echo "pyMC Console dist version: unavailable"; fi \
   && echo "Wrapper policy: copying Console dist as-is; no source or dist patching." \
   && mkdir -p "${CONSOLE_WEB_DIR}" /usr/share/licenses/pymc-console \
   && cp -a /tmp/pymc_console-dist/frontend/dist/. "${CONSOLE_WEB_DIR}/" \
   && cp /tmp/pymc_console-dist/LICENSE /usr/share/licenses/pymc-console/LICENSE \
-  && echo "Console web path: ${CONSOLE_WEB_DIR}" \
+  && echo "Console web path: ${CONSOLE_WEB_DIR}"
+
+RUN mkdir -p /usr/share/pymc-repeater-console \
+  && BUILD_VERSION="${BUILD_VERSION}" BUILD_ARCH="${BUILD_ARCH}" BUILD_DATE="${BUILD_DATE}" \
+     PYMC_REPEATER_REPO="${PYMC_REPEATER_REPO}" PYMC_REPEATER_REF="${PYMC_REPEATER_REF}" \
+     PYMC_CONSOLE_REPO="${PYMC_CONSOLE_REPO}" PYMC_CONSOLE_REF="${PYMC_CONSOLE_REF}" \
+     python3 - <<'PY'
+import datetime
+import json
+import os
+import pathlib
+
+metadata_path = pathlib.Path("/usr/share/pymc-repeater-console/upstream-build-info.json")
+build_date = os.environ.get("BUILD_DATE", "").strip()
+if not build_date:
+    build_date = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+def read_text(path):
+    return pathlib.Path(path).read_text(encoding="utf-8").strip()
+
+metadata = {
+    "schema_version": 1,
+    "wrapper_app": "pymc-repeater-console",
+    "wrapper_version": os.environ.get("BUILD_VERSION", ""),
+    "build_arch": os.environ.get("BUILD_ARCH", ""),
+    "build_date": build_date,
+    "pymc_repeater": {
+        "repository": os.environ["PYMC_REPEATER_REPO"],
+        "requested_ref": os.environ["PYMC_REPEATER_REF"],
+        "resolved_sha": read_text("/tmp/pymc_repeater_resolved_sha"),
+    },
+    "pymc_console_dist": {
+        "repository": os.environ["PYMC_CONSOLE_REPO"],
+        "requested_ref": os.environ["PYMC_CONSOLE_REF"],
+        "resolved_sha": read_text("/tmp/pymc_console_resolved_sha"),
+        "version": read_text("/tmp/pymc_console_version"),
+    },
+    "note": "Wrapper diagnostic build metadata only. This is not upstream API data and must not be used to alter pyMC runtime behavior.",
+}
+
+metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+
+RUN python3 -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json \
   && rm -rf /tmp/pymc_console-dist
 
 COPY rootfs /
