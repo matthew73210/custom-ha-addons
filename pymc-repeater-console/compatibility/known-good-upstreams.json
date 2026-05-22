@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verification_date": "2026-05-20",
+  "verification_date": "2026-05-22",
   "purpose": "Track upstream refs known to build and currently pinned by default for pymc-repeater-console release builds.",
   "status_note": "These refs are current pinned release defaults and known-good candidates from review, not guaranteed by contract tests yet.",
   "release_policy": {
@@ -11,13 +11,14 @@
   "current_pinned_release_refs": [
     {
       "addon_slug": "pymc-repeater-console",
-      "verification_date": "2026-05-20",
+      "verification_date": "2026-05-22",
       "contract_test_status": "not-yet-guaranteed",
       "pymc_repeater": {
         "repository": "pyMC-dev/pyMC_Repeater",
-        "requested_ref": "a36cb6af44ab63247dd6d0f414afc6e53de18012",
-        "resolved_sha": "a36cb6af44ab63247dd6d0f414afc6e53de18012",
-        "status": "pinned-release-default-known-good-candidate"
+        "requested_ref": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
+        "resolved_sha": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
+        "status": "pinned-release-default-buildable-candidate",
+        "verification_note": "Updated from a36cb6af44ab63247dd6d0f414afc6e53de18012 because that commit did not contain upstream radio_type=pymc_tcp support and failed the wrapper build guard."
       },
       "pymc_console_dist": {
         "repository": "dmduran12/pymc_console-dist",

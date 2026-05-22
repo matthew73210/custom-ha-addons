@@ -9,7 +9,7 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 
 Current upstream build refs:
 
-- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `a36cb6af44ab63247dd6d0f414afc6e53de18012`
+- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `e17d1137ab2d2d5b86d03c99523272289b7688aa`
 - pyMC_core repo/ref: `https://github.com/pyMC-dev/pyMC_core.git` / `3987d3e8863bdf078bc9a9a7e3d29320028f49ee`
 - pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 - pyMC Console dist version: `0.9.329`

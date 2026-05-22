@@ -22,13 +22,13 @@ Current pinned release defaults and known-good candidate refs are recorded in `c
 
 ## Current Pinned Release Defaults
 
-Observed during wrapper review on 2026-05-20:
+Current pinned refs:
 
-- pyMC Repeater: `a36cb6af44ab63247dd6d0f414afc6e53de18012`
+- pyMC Repeater: `e17d1137ab2d2d5b86d03c99523272289b7688aa`
 - pyMC Console dist: `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 - pyMC Console dist version: `0.9.329`
 
-These SHAs are now the Dockerfile default refs for release/default builds. They remain known-good candidates rather than fully contract-tested refs until contract tests prove the wrapper routes, static assets, WebSocket forwarding, config persistence, direct access, and ingress-style access still satisfy the wrapper contract.
+These SHAs are now the Dockerfile default refs for release/default builds. The pyMC Repeater ref was updated on 2026-05-22 because the earlier pinned ref, `a36cb6af44ab63247dd6d0f414afc6e53de18012`, did not contain upstream `radio_type: pymc_tcp` support and failed the wrapper's build guard. They remain known-good candidates rather than fully contract-tested refs until contract tests prove the wrapper routes, static assets, WebSocket forwarding, config persistence, direct access, and ingress-style access still satisfy the wrapper contract.
 
 ## Release Policy
 

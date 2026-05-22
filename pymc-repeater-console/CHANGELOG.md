@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.24-dev
+
+- Updated the pinned pyMC Repeater default ref to a buildable upstream commit that includes `radio_type: pymc_tcp` support.
+- Kept the pyMC Console dist pin unchanged.
+- Preserved the build guard so missing upstream `pymc_tcp` support still fails clearly.
+- No upstream source files were patched.
+
 ## 0.2.23-dev
 
 - Reduced fragile ingress response rewrites by removing one hardcoded Console history bundle rewrite and the unnecessary Carto tile JSON rewrite.
