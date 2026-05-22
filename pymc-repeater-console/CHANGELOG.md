@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.27-dev
+
+- Documented pymc-usb-compatible transport modes: local USB serial through `radio_type: pymc_usb` and remote TCP/IP through upstream `radio_type: pymc_tcp`.
+- Clarified that TCP/IP mode uses `pymc_tcp.host` and `pymc_tcp.port`; `pymc_usb.baudrate` applies only to local serial mode.
+- Added documentation contract checks so pymc_usb examples stay aligned with the upstream schema.
+- Kept all pymc_usb connection settings in `/config/pymc-repeater/config.yaml`; no Home Assistant app options were added.
+- No runtime, ingress, API, or upstream source behavior changed.
+
 ## 0.2.26-dev
 
 - Added Phase 5 CI validation for wrapper source, add-on metadata, config-file-only settings, forbidden compat API routing, removed frontend rewrite patterns, and Dockerfile parsing.

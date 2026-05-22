@@ -158,7 +158,7 @@ Goal: make CI explain whether the wrapper or upstream changed.
 - Scheduled/manual candidate workflow tests configurable upstream candidate refs without publishing release images.
 - Candidate refs use `PYMC_REPEATER_CANDIDATE_REF` and `PYMC_CONSOLE_CANDIDATE_REF`; `main` may be the default, but `dev` or feature branches are supported while upstream work such as `pymc_usb` is pending.
 - CI failure text distinguishes wrapper validation failures, pinned upstream build/test failures, and upstream candidate drift or contract changes.
-- pyMC USB runtime configuration remains in `/config/pymc-repeater/config.yaml`; no Home Assistant runtime options are restored.
+- pyMC USB local serial and remote TCP/IP runtime configuration remains in `/config/pymc-repeater/config.yaml`; no Home Assistant runtime options are restored.
 
 Deliverable: CI that protects wrapper purity and upstream contract visibility.
 

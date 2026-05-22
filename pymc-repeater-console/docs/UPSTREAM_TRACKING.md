@@ -172,7 +172,12 @@ CI runs both source-level tests and live-container tests. Live-container tests r
 
 ## pyMC USB Tracking
 
-The pinned pyMC Repeater upstream supports `radio_type: pymc_usb`. The runtime USB serial path is configured in `/config/pymc-repeater/config.yaml` under `pymc_usb.port`; it is not a Home Assistant add-on UI option. See `docs/PYMC_USB.md` for the exact config shape and wrapper/device boundary.
+The pinned pyMC Repeater upstream supports the pymc-usb-compatible modem family in two transport configurations:
+
+- Local serial: `radio_type: pymc_usb`, `pymc_usb.port`, optional `pymc_usb.baudrate`.
+- Remote TCP/IP: `radio_type: pymc_tcp`, `pymc_tcp.host`, `pymc_tcp.port`.
+
+Upstream candidate `dev` at `85f282357ca6cd6516d961eb8650ecc2a6286f74` does not add `host`, `ip`, `tcp`, `socket`, `url`, or serial-over-TCP keys under `pymc_usb`; TCP/IP remains the `pymc_tcp` transport. The runtime USB serial path or remote TCP/IP endpoint is configured in `/config/pymc-repeater/config.yaml`; it is not a Home Assistant add-on UI option. See `docs/PYMC_USB.md` for the exact config shape and wrapper/device boundary.
 
 ## Failure Policy
 

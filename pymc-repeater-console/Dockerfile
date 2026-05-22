@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.26-dev
+ARG BUILD_VERSION=0.2.27-dev
 ARG BUILD_ARCH=amd64
 ARG BUILD_DATE=
 ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git

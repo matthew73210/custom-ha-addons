@@ -50,6 +50,7 @@ If the image needs real radio hardware or a site-specific config to stay running
 - `test_frontend_rewrites.py`: response-rewrite inventory checks for removed minified rewrites, remaining `sub_filter` rules, helper scripts, and Carto proxy behavior.
 - `test_upstream_api_contract.py`: upstream API boundary checks that verify normal traffic does not reach the quarantined compatibility API.
 - `test_config_persistence.py`: persisted config preservation, one-time default creation, and removal of Home Assistant runtime option references from startup scripts.
+- `test_pymc_usb_docs.py`: documentation guardrails for local USB serial and remote TCP/IP pymc-usb-compatible transport examples.
 
 ## API Purity Tests
 

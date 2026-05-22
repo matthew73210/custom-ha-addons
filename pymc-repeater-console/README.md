@@ -16,7 +16,7 @@ Current upstream build refs:
 
 The Docker build logs the requested ref and resolved commit SHA for each upstream ref, writes `/usr/share/pymc-repeater-console/upstream-build-info.json`, and fails clearly if a requested ref cannot be resolved. The refs remain configurable with `PYMC_REPEATER_REF`, `PYMC_CORE_REF`, and `PYMC_CONSOLE_REF` build arguments for dev/testing.
 
-Compatibility note: release/default builds now use pinned upstream SHAs instead of moving branches. The Wi-Fi modem path uses upstream `radio_type: pymc_tcp`. The `pymc_usb` firmware exposes its TCP modem protocol on port `5055` by default; it is not KISS, UDP, WebSocket, HTTP radio control, or serial-over-Wi-Fi. This wrapper creates a default upstream config only when no persisted config exists and does not add a protocol bridge or compatibility shim.
+Compatibility note: release/default builds now use pinned upstream SHAs instead of moving branches. The pymc-usb-compatible modem family can be reached locally over USB serial with upstream `radio_type: pymc_usb`, or remotely over TCP/IP with upstream `radio_type: pymc_tcp`. The wrapper creates a default upstream config only when no persisted config exists and does not add a protocol bridge or compatibility shim.
 
 ## Installation
 
@@ -131,9 +131,9 @@ repeater:
 
 The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`, SQLite WAL files, Glass certificates, and other pyMC history/cache files. If an older install has runtime files in `/data/pymc-repeater`, the wrapper migrates them into `/config/pymc-repeater` on startup without overwriting newer persistent files or an existing persistent `config.yaml`.
 
-Edit `/config/pymc-repeater/config.yaml` to configure radio type, node name, location, logging, KISS serial settings, `pymc_tcp`, Glass, storage, and other pyMC Repeater runtime settings. Use the Home Assistant **Network** settings only for add-on port mappings such as the companion frame server.
+Edit `/config/pymc-repeater/config.yaml` to configure radio type, node name, location, logging, KISS serial settings, `pymc_usb`, `pymc_tcp`, Glass, storage, and other pyMC Repeater runtime settings. Use the Home Assistant **Network** settings only for add-on port mappings such as the companion frame server.
 
-The app intentionally has no Home Assistant UI options for pyMC Repeater runtime settings. Values such as node name, coordinates, country, radio type, radio frequency, KISS serial settings, `pymc_tcp`, Glass, admin password, logging, and raw config YAML belong in `/config/pymc-repeater/config.yaml`.
+The app intentionally has no Home Assistant UI options for pyMC Repeater runtime settings. Values such as node name, coordinates, country, radio type, radio frequency, KISS serial settings, `pymc_usb` serial paths, remote TCP/IP hosts and ports, `pymc_tcp`, Glass, admin password, logging, and raw config YAML belong in `/config/pymc-repeater/config.yaml`.
 
 If Home Assistant Supervisor logs warnings about old options such as `node_name`, `radio_type`, `frequency_hz`, `pymc_tcp_host`, or `config_yaml`, those warnings are stale saved add-on options from an older version. They are not options supported by the current wrapper. Reset or re-save the add-on configuration in Home Assistant, or reinstall the add-on if needed, and keep the runtime settings in `/config/pymc-repeater/config.yaml`.
 
@@ -167,9 +167,34 @@ kiss:
   baud_rate: 115200
 ```
 
-## pymc_usb Wi-Fi/TCP Example
+## pymc_usb transport modes
 
-Provision the modem on Wi-Fi first, then edit `/config/pymc-repeater/config.yaml` to use upstream `pymc_tcp`:
+`pymc_usb` names the pymc-usb-compatible modem family and protocol. It does not always mean the modem is physically attached over USB. Upstream pyMC Repeater currently exposes two transport configurations for that modem family.
+
+| Mode | Use when | Config value | Example field |
+| --- | --- | --- | --- |
+| Local USB serial | The modem is plugged into the Home Assistant host | `/dev/serial/by-id/...` or `/dev/ttyACM*` | `pymc_usb.port` |
+| TCP/IP | The pymc-usb-compatible device is reachable over the network | Remote IP address or hostname and TCP port | `pymc_tcp.host`, `pymc_tcp.port` |
+
+### Local USB Serial Example
+
+Use this when the pymc-usb modem is plugged directly into the Home Assistant host:
+
+```yaml
+radio_type: pymc_usb
+
+pymc_usb:
+  port: /dev/serial/by-id/usb-example-pymc-radio
+  baudrate: 921600
+  lbt_enabled: true
+  lbt_max_attempts: 5
+```
+
+Prefer `/dev/serial/by-id/...` because it is stable across reboots. `/dev/ttyACM*`, `/dev/ttyUSB*`, and `/dev/ttyS*` may work but can change. The wrapper already declares `usb: true` and `uart: true`; the serial path is configured only in `/config/pymc-repeater/config.yaml`.
+
+### TCP/IP Example
+
+Use this when the pymc-usb-compatible device is exposed over the network. Upstream uses `radio_type: pymc_tcp` for this mode, with `pymc_tcp.host` for the remote IP address or hostname and `pymc_tcp.port` for the remote TCP port:
 
 ```yaml
 radio_type: pymc_tcp
@@ -182,13 +207,15 @@ radio:
   preamble_length: 16
   sync_word: 18
 pymc_tcp:
-  host: 192.168.1.50
+  host: 192.168.1.49
   port: 5055
   token: ""
   connect_timeout: 5.0
   lbt_enabled: true
   lbt_max_attempts: 5
 ```
+
+`baudrate` is not used by upstream in TCP/IP mode because there is no local serial link. Do not put `host`, `ip`, `tcp`, `socket`, `url`, or serial-over-TCP keys under `pymc_usb`; the accepted network schema is the upstream `pymc_tcp` section shown above.
 
 These values are upstream pyMC Repeater config keys. The wrapper does not translate Home Assistant option names or fill automatic radio defaults on later starts, so the radio settings in the config file must match the working modem and the rest of the mesh.
 
