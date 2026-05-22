@@ -20,6 +20,11 @@ The tests do not require Home Assistant Supervisor. Ingress behavior is simulate
 - `PYMC_REPEATER_CONSOLE_SKIP_DOCKER`: when truthy, skip Docker startup if no base URL is provided.
 - `PYMC_REPEATER_CONSOLE_TEST_TIMEOUT`: startup and request timeout in seconds; default is `60`.
 
+CI candidate-drift jobs also use upstream ref variables outside the pytest process:
+
+- `PYMC_REPEATER_CANDIDATE_REF`: pyMC Repeater candidate ref for non-release drift tests. Set to `main`, `dev`, a feature branch, or a commit SHA.
+- `PYMC_CONSOLE_CANDIDATE_REF`: pyMC Console dist candidate ref for non-release drift tests.
+
 ## Run Against A Running Container
 
 ```bash
@@ -60,3 +65,12 @@ The API contract tests cover:
 ## Frontend Rewrite Tests
 
 The frontend rewrite tests are source-level guardrails. They assert that the Phase 4 removals stay removed, and that every remaining `sub_filter` rule is part of an explicit inventory. The remaining hardcoded minified rewrites are deferred exceptions for router basename support; changing upstream bundles should fail these tests clearly instead of silently changing wrapper behavior.
+
+## CI Behavior
+
+Phase 5 runs the suite in two ways:
+
+- Source-level mode with `PYMC_REPEATER_CONSOLE_SKIP_DOCKER=1`. Live-container tests are skipped, while source checks still validate routing, config persistence, and rewrite inventories.
+- Live-container mode against an amd64 image built from pinned upstream refs. These tests exercise startup, routes, ingress-style paths, WebSocket forwarding, and metadata checks.
+
+Scheduled/manual upstream-candidate CI builds a non-published amd64 image with candidate refs, then runs the same live suite. Candidate failures mean upstream drift or a contract change in the tested candidate; they do not automatically mean the pinned release image is broken.

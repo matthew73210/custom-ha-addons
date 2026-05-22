@@ -5,7 +5,7 @@
   "status_note": "These refs are current pinned release defaults and known-good candidates from review, not guaranteed by contract tests yet.",
   "release_policy": {
     "release_builds": "pin pyMC Repeater and pyMC Console refs to commit SHAs by default",
-    "scheduled_or_dev_tests": "may test upstream main but must not publish release images",
+    "scheduled_or_dev_tests": "may test configurable upstream candidate refs such as main, dev, or feature branches but must not publish release images",
     "upstream_drift": "must be detected and reported, not hidden by compatibility shims"
   },
   "current_pinned_release_refs": [

@@ -9,7 +9,22 @@ on:
     paths:
       - ".github/workflows/build-pymc-repeater-console.yml"
       - "pymc-repeater-console/**"
+  pull_request:
+    paths:
+      - ".github/workflows/build-pymc-repeater-console.yml"
+      - "pymc-repeater-console/**"
   workflow_dispatch:
+    inputs:
+      pymc_repeater_candidate_ref:
+        description: "Non-release pyMC Repeater candidate ref to build/test, for example main, dev, or a feature branch"
+        required: false
+        default: ""
+      pymc_console_candidate_ref:
+        description: "Non-release pyMC Console dist candidate ref to build/test"
+        required: false
+        default: ""
+  schedule:
+    - cron: "23 4 * * *"
 
 permissions:
   contents: read
@@ -18,13 +33,216 @@ permissions:
 env:
   ADDON_DIR: pymc-repeater-console
   IMAGE_OWNER: matthew73210
-  PYMC_REPEATER_REF: dev
-  PYMC_CONSOLE_REF: main
+  PYMC_REPEATER_PINNED_REF: e17d1137ab2d2d5b86d03c99523272289b7688aa
+  PYMC_CONSOLE_PINNED_REF: 2d961cef1ae1a355eb06e34fba99788d9ffca44a
+  PYMC_REPEATER_CANDIDATE_REF: ${{ vars.PYMC_REPEATER_CANDIDATE_REF || 'main' }}
+  PYMC_CONSOLE_CANDIDATE_REF: ${{ vars.PYMC_CONSOLE_CANDIDATE_REF || 'main' }}
 
 jobs:
-  build:
-    name: Build ${{ matrix.arch }}
+  validate:
+    name: Validate wrapper source
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate YAML and JSON metadata
+        run: |
+          ruby -ryaml -e 'ARGV.each { |p| YAML.load_file(p); puts "YAML ok: #{p}" }' \
+            "${ADDON_DIR}/config.yaml" \
+            ".github/workflows/build-pymc-repeater-console.yml"
+          ruby -rjson -e 'ARGV.each { |p| JSON.parse(File.read(p)); puts "JSON ok: #{p}" }' \
+            "repository.json" \
+            "${ADDON_DIR}/compatibility/known-good-upstreams.json"
+
+      - name: Validate shell startup scripts
+        run: |
+          while IFS= read -r -d '' file; do
+            echo "Shell syntax check: ${file}"
+            bash -n "${file}"
+          done < <(find "${ADDON_DIR}/rootfs/etc" -type f \( -name "*.sh" -o -name "run" -o -name "finish" \) -print0)
+
+      - name: Validate Python syntax
+        run: |
+          python3 - <<'PY'
+          import ast
+          import pathlib
+
+          roots = [
+              pathlib.Path("pymc-repeater-console/rootfs/opt/pymc_repeater"),
+              pathlib.Path("pymc-repeater-console/tests/contract"),
+          ]
+          for root in roots:
+              for path in sorted(root.rglob("*.py")):
+                  ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+                  print(f"Python syntax ok: {path}")
+          PY
+
+      - name: Check Home Assistant options remain config-file-only
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          config = pathlib.Path("pymc-repeater-console/config.yaml").read_text(encoding="utf-8")
+          forbidden = {
+              "options",
+              "schema",
+              "node_name",
+              "public_name",
+              "latitude",
+              "longitude",
+              "country",
+              "radio_type",
+              "map_region",
+              "frequency_preset",
+              "frequency_hz",
+              "tx_power",
+              "bandwidth",
+              "spreading_factor",
+              "coding_rate",
+              "sync_word",
+              "preamble_length",
+              "kiss_port",
+              "kiss_baud_rate",
+              "pymc_tcp_host",
+              "pymc_tcp_port",
+              "pymc_tcp_token",
+              "pymc_tcp_connect_timeout",
+              "pymc_tcp_lbt_enabled",
+              "pymc_tcp_lbt_max_attempts",
+              "admin_password",
+              "glass_enabled",
+              "glass_base_url",
+              "glass_inform_interval_seconds",
+              "log_level",
+              "config_yaml",
+          }
+          for key in sorted(forbidden):
+              needle = f"\n{key}:"
+              if needle in config:
+                  raise SystemExit(f"Forbidden Home Assistant runtime option is present in config.yaml: {key}")
+          print("OK: config.yaml has no Home Assistant runtime options/schema")
+          PY
+
+      - name: Check forbidden compat API routing is absent
+        run: |
+          if grep -R "127\\.0\\.0\\.1:8090" "${ADDON_DIR}/rootfs/etc/nginx" "${ADDON_DIR}/rootfs/etc/s6-overlay"; then
+            echo "ERROR: forbidden compat API upstream 127.0.0.1:8090 was reintroduced"
+            exit 1
+          fi
+          if grep -R "location = /api/recent_packets\\|location = /api/bulk_packets\\|location = /api/filtered_packets\\|location \\^~ /api/analytics/" "${ADDON_DIR}/rootfs/etc/nginx"; then
+            echo "ERROR: forbidden wrapper-owned packet/analytics API routing was reintroduced"
+            exit 1
+          fi
+          if find "${ADDON_DIR}/rootfs/etc/s6-overlay" -type f -print0 | xargs -0 grep -n "console_compat_api\\|pymc-console-compat-api"; then
+            echo "ERROR: quarantined console_compat_api service was reintroduced into normal startup"
+            exit 1
+          fi
+          echo "OK: normal API traffic is not routed to console_compat_api"
+
+      - name: Check removed minified rewrite patterns are absent
+        run: |
+          if grep -R "history:r(window\\.PyMCIngressBasePath||\`/\`),routes:" "${ADDON_DIR}/rootfs/etc/nginx"; then
+            echo "ERROR: removed Console history minified rewrite pattern was reintroduced"
+            exit 1
+          fi
+          echo "OK: removed minified rewrite pattern is absent"
+
+      - name: Check upstream source is not patched by build scripts
+        run: |
+          if grep -R -nE "sed -i|perl -pi|patch -p|apply_patch" "${ADDON_DIR}/Dockerfile" "${ADDON_DIR}/rootfs"; then
+            echo "ERROR: build/startup scripts appear to patch upstream files"
+            exit 1
+          fi
+          echo "OK: no upstream patch commands found"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Check Dockerfile can be parsed
+        run: |
+          docker buildx build --check \
+            --build-arg BUILD_FROM=debian:bookworm-slim \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg BUILD_VERSION=ci-check \
+            --build-arg PYMC_REPEATER_REF="${PYMC_REPEATER_PINNED_REF}" \
+            --build-arg PYMC_CONSOLE_REF="${PYMC_CONSOLE_PINNED_REF}" \
+            -f "${ADDON_DIR}/Dockerfile" \
+            "${ADDON_DIR}"
+
+  contract-tests:
+    name: Run contract tests against pinned image
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install contract test dependencies
+        run: python3 -m pip install --upgrade pytest
+
+      - name: Read add-on version
+        id: addon
+        run: |
+          version="$(ruby -ryaml -e 'puts YAML.load_file(File.join(ENV.fetch("ADDON_DIR"), "config.yaml")).fetch("version")')"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Add-on version: ${version}"
+
+      - name: Run source-level contract tests
+        run: |
+          PYMC_REPEATER_CONSOLE_SKIP_DOCKER=1 \
+            python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build pinned upstream image for contract tests
+        run: |
+          docker build \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg BUILD_VERSION="${{ steps.addon.outputs.version }}" \
+            --build-arg PYMC_REPEATER_REF="${PYMC_REPEATER_PINNED_REF}" \
+            --build-arg PYMC_CONSOLE_REF="${PYMC_CONSOLE_PINNED_REF}" \
+            -t pymc-repeater-console:contract-pinned \
+            -f "${ADDON_DIR}/Dockerfile" \
+            "${ADDON_DIR}"
+
+      - name: Show pinned upstream build metadata
+        run: |
+          docker run --rm pymc-repeater-console:contract-pinned \
+            python3 -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
+
+      - name: Run live contract tests against pinned image
+        env:
+          PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-pinned
+          PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
+        run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
+
+      - name: Show container logs on contract failure
+        if: failure()
+        run: |
+          docker ps -a --filter "name=pymc-contract-" --format "{{.Names}}" | while read -r name; do
+            echo "::group::${name} logs"
+            docker logs "${name}" || true
+            echo "::endgroup::"
+          done
+
+  build:
+    name: Build and publish pinned upstream image (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs:
+      - validate
+      - contract-tests
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -70,11 +288,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Show upstream refs
+      - name: Show pinned upstream refs
         run: |
-          echo "Workflow PYMC_REPEATER_REF=${PYMC_REPEATER_REF}"
+          echo "Publishing from pinned upstream refs only."
+          echo "PYMC_REPEATER_REF=${PYMC_REPEATER_PINNED_REF}"
+          echo "PYMC_CONSOLE_REF=${PYMC_CONSOLE_PINNED_REF}"
 
-      - name: Build and push add-on image
+      - name: Build and push pinned add-on image
         uses: docker/build-push-action@v7
         with:
           context: ${{ env.ADDON_DIR }}
@@ -84,8 +304,8 @@ jobs:
             BUILD_FROM=${{ matrix.build_from }}
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_VERSION=${{ steps.addon.outputs.version }}
-            PYMC_REPEATER_REF=${{ env.PYMC_REPEATER_REF }}
-            PYMC_CONSOLE_REF=${{ env.PYMC_CONSOLE_REF }}
+            PYMC_REPEATER_REF=${{ env.PYMC_REPEATER_PINNED_REF }}
+            PYMC_CONSOLE_REF=${{ env.PYMC_CONSOLE_PINNED_REF }}
           tags: |
             ghcr.io/${{ env.IMAGE_OWNER }}/pymc-repeater-console-${{ matrix.arch }}:${{ steps.addon.outputs.version }}
             ghcr.io/${{ env.IMAGE_OWNER }}/pymc-repeater-console-${{ matrix.arch }}:latest
@@ -93,7 +313,88 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.addon.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.pymc_repeater.ref=${{ env.PYMC_REPEATER_REF }}
-            org.opencontainers.image.pymc_console.ref=${{ env.PYMC_CONSOLE_REF }}
+            org.opencontainers.image.pymc_repeater.ref=${{ env.PYMC_REPEATER_PINNED_REF }}
+            org.opencontainers.image.pymc_console.ref=${{ env.PYMC_CONSOLE_PINNED_REF }}
           cache-from: type=gha,scope=pymc-repeater-console-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=pymc-repeater-console-${{ matrix.arch }}
+
+  upstream-candidate-drift:
+    name: Test upstream candidate drift
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs:
+      - validate
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install contract test dependencies
+        run: python3 -m pip install --upgrade pytest
+
+      - name: Resolve upstream candidate refs
+        id: candidate
+        run: |
+          repeater_ref="${{ github.event_name == 'workflow_dispatch' && inputs.pymc_repeater_candidate_ref || '' }}"
+          console_ref="${{ github.event_name == 'workflow_dispatch' && inputs.pymc_console_candidate_ref || '' }}"
+          if [ -z "${repeater_ref}" ]; then
+            repeater_ref="${PYMC_REPEATER_CANDIDATE_REF}"
+          fi
+          if [ -z "${console_ref}" ]; then
+            console_ref="${PYMC_CONSOLE_CANDIDATE_REF}"
+          fi
+          echo "pymc_repeater_ref=${repeater_ref}" >> "${GITHUB_OUTPUT}"
+          echo "pymc_console_ref=${console_ref}" >> "${GITHUB_OUTPUT}"
+          echo "Candidate pyMC Repeater ref: ${repeater_ref}"
+          echo "Candidate pyMC Console dist ref: ${console_ref}"
+
+      - name: Read add-on version
+        id: addon
+        run: |
+          version="$(ruby -ryaml -e 'puts YAML.load_file(File.join(ENV.fetch("ADDON_DIR"), "config.yaml")).fetch("version")')"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Add-on version: ${version}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build upstream candidate image
+        run: |
+          docker build \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg BUILD_VERSION="${{ steps.addon.outputs.version }}-candidate" \
+            --build-arg PYMC_REPEATER_REF="${{ steps.candidate.outputs.pymc_repeater_ref }}" \
+            --build-arg PYMC_CONSOLE_REF="${{ steps.candidate.outputs.pymc_console_ref }}" \
+            -t pymc-repeater-console:contract-candidate \
+            -f "${ADDON_DIR}/Dockerfile" \
+            "${ADDON_DIR}"
+
+      - name: Show upstream candidate build metadata
+        run: |
+          docker run --rm pymc-repeater-console:contract-candidate \
+            python3 -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
+
+      - name: Run contract tests against upstream candidate
+        env:
+          PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-candidate
+          PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
+        run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
+
+      - name: Report upstream candidate drift
+        if: failure()
+        run: |
+          echo "Upstream candidate drift or contract change detected."
+          echo "Pinned release builds are not automatically broken by this result."
+          echo "Candidate pyMC Repeater ref: ${{ steps.candidate.outputs.pymc_repeater_ref }}"
+          echo "Candidate pyMC Console dist ref: ${{ steps.candidate.outputs.pymc_console_ref }}"
+          docker ps -a --filter "name=pymc-contract-" --format "{{.Names}}" | while read -r name; do
+            echo "::group::${name} logs"
+            docker logs "${name}" || true
+            echo "::endgroup::"
+          done

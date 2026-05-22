@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.26-dev
+
+- Added Phase 5 CI validation for wrapper source, add-on metadata, config-file-only settings, forbidden compat API routing, removed frontend rewrite patterns, and Dockerfile parsing.
+- Added CI contract test jobs for source-level tests and live amd64 container tests against the pinned upstream image.
+- Added scheduled/manual upstream-candidate drift testing with configurable candidate refs and no publishing.
+- Kept release publishing on pinned upstream refs only.
+- Documented pyMC USB runtime configuration in the persisted config file.
+- No runtime, ingress, API, config authority, or upstream source behavior changed.
+
 ## 0.2.25-dev
 
 - Kept pyMC Repeater runtime configuration file-only; no removed Home Assistant runtime options were restored.
