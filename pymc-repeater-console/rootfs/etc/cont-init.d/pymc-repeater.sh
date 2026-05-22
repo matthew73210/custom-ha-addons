@@ -6,8 +6,6 @@ DATA_ROOT="/data/pymc-repeater"
 ETC_ROOT="/etc/pymc_repeater"
 VAR_ROOT="/var/lib/pymc_repeater"
 CONFIG_PATH="${CONFIG_ROOT}/config.yaml"
-OPTIONS_PATH="/data/options.json"
-CONSOLE_WEB_PATH="/opt/pymc_console/web/html"
 PYTHON_BIN="/opt/venv/bin/python3"
 
 mkdir -p "${CONFIG_ROOT}" "${DATA_ROOT}"
@@ -61,6 +59,10 @@ for item in sorted(source.rglob("*")):
     destination = target / rel
     destination.parent.mkdir(parents=True, exist_ok=True)
 
+    if rel == pathlib.Path("config.yaml") and destination.exists():
+        skipped.append("config.yaml (persistent config preserved)")
+        continue
+
     if not destination.exists():
         shutil.copy2(item, destination)
         migrated.append(str(rel))
@@ -99,67 +101,12 @@ PY
 )"
 
 CONFIG_ACTION="$("${PYTHON_BIN}" - <<'PY'
-import copy
-import json
 import pathlib
-import sys
 
 import yaml
 
-options_path = pathlib.Path("/data/options.json")
-config_root = pathlib.Path("/config/pymc-repeater")
-config_path = config_root / "config.yaml"
+config_path = pathlib.Path("/config/pymc-repeater/config.yaml")
 persistent_root = "/config/pymc-repeater"
-identity_file = f"{persistent_root}/identity.key"
-wrapper_only_option_keys = {
-    "pymc_tcp_host",
-    "pymc_tcp_port",
-    "pymc_tcp_token",
-    "pymc_tcp_connect_timeout",
-    "pymc_tcp_lbt_enabled",
-    "pymc_tcp_lbt_max_attempts",
-}
-
-with options_path.open("r", encoding="utf-8") as handle:
-    options = json.load(handle)
-
-
-def option_str(name, default=""):
-    value = options.get(name)
-    if value is None:
-        return default
-    value = str(value)
-    return value if value != "" else default
-
-
-def option_int(name, default):
-    value = options.get(name)
-    if value is None or value == "":
-        return default
-    return int(value)
-
-
-def option_float(name, default):
-    value = options.get(name)
-    if value is None or value == "":
-        return default
-    return float(value)
-
-
-def option_bool(name, default):
-    value = options.get(name)
-    if value is None or value == "":
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    normalized = str(value).strip().lower()
-    if normalized in ("1", "true", "yes", "on", "enabled"):
-        return True
-    if normalized in ("0", "false", "no", "off", "disabled"):
-        return False
-    return default
 
 
 def write_config(config):
@@ -170,248 +117,17 @@ def write_config(config):
     tmp_path.replace(config_path)
 
 
-def enforce_wrapper_fields(config):
-    if not isinstance(config, dict):
-        raise TypeError("pyMC config must be a YAML mapping/object")
-
-    for key in wrapper_only_option_keys:
-        config.pop(key, None)
-
-    config.setdefault("repeater", {})
-    config["repeater"]["identity_file"] = identity_file
-
-    config.setdefault("storage", {})
-    config["storage"]["storage_dir"] = persistent_root
-
-    config.setdefault("http", {})
-    config["http"]["host"] = "127.0.0.1"
-    config["http"]["port"] = 8001
-
-    config.setdefault("web", {})
-    config["web"]["web_path"] = "/opt/pymc_console/web/html"
-
-    config.setdefault("logging", {})
-    config["logging"]["level"] = option_str("log_level", "info").upper()
-    config["logging"].setdefault("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    return config
-
-
-def config_path_string(parts):
-    return ".".join(str(part) for part in parts)
-
-
-def default_leaf_paths(value, prefix):
-    if isinstance(value, dict) and value:
-        paths = []
-        for key, child in value.items():
-            paths.extend(default_leaf_paths(child, prefix + [key]))
-        return paths
-    return [config_path_string(prefix)]
-
-
-def add_default(mapping, key, value, path, added_defaults):
-    if key not in mapping:
-        mapping[key] = copy.deepcopy(value)
-        added_defaults.extend(default_leaf_paths(value, path + [key]))
-
-
-def merge_missing(config, defaults, added_defaults=None, path=None):
-    if not isinstance(config, dict):
-        return config
-
-    if added_defaults is None:
-        added_defaults = []
-    if path is None:
-        path = []
-
-    for key, default_value in defaults.items():
-        if key not in config:
-            config[key] = copy.deepcopy(default_value)
-            added_defaults.extend(default_leaf_paths(default_value, path + [key]))
-        elif isinstance(config[key], dict) and isinstance(default_value, dict):
-            merge_missing(config[key], default_value, added_defaults, path + [key])
-    return config
-
-
-def normalize_mqtt_config(config, added_defaults=None):
-    if added_defaults is None:
-        added_defaults = []
-
-    country = option_str("country", "FR").upper()
-    map_region = option_str("map_region", option_str("region", "PAR")).upper()
-
-    add_default(config, "mqtt_brokers", {}, [], added_defaults)
-    mqtt_brokers = config.get("mqtt_brokers")
-    if isinstance(mqtt_brokers, dict):
-        add_default(mqtt_brokers, "iata_code", map_region, ["mqtt_brokers"], added_defaults)
-        add_default(mqtt_brokers, "country", country, ["mqtt_brokers"], added_defaults)
-        add_default(mqtt_brokers, "status_interval", 300, ["mqtt_brokers"], added_defaults)
-        add_default(mqtt_brokers, "owner", "", ["mqtt_brokers"], added_defaults)
-        add_default(mqtt_brokers, "email", "", ["mqtt_brokers"], added_defaults)
-        add_default(mqtt_brokers, "brokers", [], ["mqtt_brokers"], added_defaults)
-
-    mqtt = config.get("mqtt")
-    if isinstance(mqtt, dict) and mqtt:
-        add_default(mqtt, "enabled", False, ["mqtt"], added_defaults)
-        add_default(mqtt, "broker", "", ["mqtt"], added_defaults)
-        add_default(mqtt, "port", 1883, ["mqtt"], added_defaults)
-        add_default(mqtt, "username", None, ["mqtt"], added_defaults)
-        add_default(mqtt, "password", None, ["mqtt"], added_defaults)
-        add_default(mqtt, "use_websockets", False, ["mqtt"], added_defaults)
-        add_default(mqtt, "tls", None, ["mqtt"], added_defaults)
-        add_default(mqtt, "base_topic", None, ["mqtt"], added_defaults)
-    elif "mqtt" not in config:
-        config["mqtt"] = {}
-        added_defaults.append("mqtt")
-
-    return config
-
-
-def carry_legacy_mqtt_metadata(config):
-    mqtt = config.get("mqtt")
-    mqtt_brokers = config.get("mqtt_brokers")
-    if not isinstance(mqtt, dict) or not mqtt or not isinstance(mqtt_brokers, dict):
-        return config
-
-    legacy_key_map = {
-        "iata_code": "iata_code",
-        "country": "country",
-        "status_interval": "status_interval",
-        "owner": "owner",
-        "email": "email",
-    }
-    for legacy_key, broker_key in legacy_key_map.items():
-        if legacy_key in mqtt and mqtt[legacy_key] not in (None, ""):
-            mqtt_brokers[broker_key] = mqtt[legacy_key]
-
-    return config
-
-
-def normalize_known_config_types(config, defaults, added_defaults=None):
-    if added_defaults is None:
-        added_defaults = []
-
-    repeater = config.setdefault("repeater", {})
-    default_repeater = defaults.get("repeater", {})
-
-    for section in ("advert_rate_limit", "advert_penalty_box", "advert_adaptive", "advert_dedupe"):
-        if not isinstance(repeater.get(section), dict):
-            repeater[section] = copy.deepcopy(default_repeater.get(section, {}))
-            added_defaults.extend(default_leaf_paths(repeater[section], ["repeater", section]))
-
-    adaptive = repeater.setdefault("advert_adaptive", {})
-    if not isinstance(adaptive.get("thresholds"), dict):
-        adaptive["thresholds"] = copy.deepcopy(
-            default_repeater.get("advert_adaptive", {}).get("thresholds", {})
-        )
-        added_defaults.extend(default_leaf_paths(adaptive["thresholds"], ["repeater", "advert_adaptive", "thresholds"]))
-
-    return config
-
-
-def apply_wrapper_defaults(config):
-    had_mqtt_brokers = "mqtt_brokers" in config
-    added_defaults = []
-    defaults = generated_config()
-    config = merge_missing(config, defaults, added_defaults)
-    if not had_mqtt_brokers:
-        carry_legacy_mqtt_metadata(config)
-    normalize_known_config_types(config, defaults, added_defaults)
-    normalize_mqtt_config(config, added_defaults)
-    return enforce_wrapper_fields(config), sorted(set(added_defaults))
-
-
-def apply_managed_radio_options(config):
-    defaults = generated_config()
-    for key in ("radio_type", "radio", "kiss", "pymc_tcp"):
-        config[key] = copy.deepcopy(defaults[key])
-    return config
-
-
-presets = {
-    "EU_868": {
-        "frequency": 869618000,
-        "tx_power": 14,
-        "bandwidth": 62500,
-        "spreading_factor": 8,
-        "coding_rate": 8,
-        "preamble_length": 17,
-        "sync_word": 13380,
-    },
-    "EU_868_LONG_RANGE": {
-        "frequency": 869525000,
-        "tx_power": 14,
-        "bandwidth": 250000,
-        "spreading_factor": 11,
-        "coding_rate": 5,
-        "preamble_length": 17,
-        "sync_word": 13380,
-    },
-    "US_915": {
-        "frequency": 910525000,
-        "tx_power": 14,
-        "bandwidth": 62500,
-        "spreading_factor": 7,
-        "coding_rate": 5,
-        "preamble_length": 17,
-        "sync_word": 13380,
-    },
-    "AU_915": {
-        "frequency": 915800000,
-        "tx_power": 14,
-        "bandwidth": 250000,
-        "spreading_factor": 10,
-        "coding_rate": 5,
-        "preamble_length": 17,
-        "sync_word": 13380,
-    },
-    "NZ_917": {
-        "frequency": 917375000,
-        "tx_power": 14,
-        "bandwidth": 62500,
-        "spreading_factor": 7,
-        "coding_rate": 5,
-        "preamble_length": 17,
-        "sync_word": 13380,
-    },
-}
-
-
-def generated_config():
-    preset_name = option_str("frequency_preset", "EU_868").upper()
-    preset = dict(presets.get(preset_name, presets["EU_868"]))
-    country = option_str("country", "FR").upper()
-    radio_type = option_str("radio_type", "sx1262").lower().strip()
-    tcp_radio = radio_type in ("pymc_tcp", "pymc_usb")
-    default_sync_word = 0x12 if tcp_radio else preset["sync_word"]
-    default_preamble_length = 16 if tcp_radio else preset["preamble_length"]
-    sync_word = option_int("sync_word", 0)
-    preamble_length = option_int("preamble_length", 0)
-    if sync_word <= 0:
-        sync_word = default_sync_word
-    if preamble_length <= 0:
-        preamble_length = default_preamble_length
-    radio = {
-        "frequency": option_int("frequency_hz", preset["frequency"]),
-        "tx_power": option_int("tx_power", preset["tx_power"]),
-        "bandwidth": option_int("bandwidth", preset["bandwidth"]),
-        "spreading_factor": option_int("spreading_factor", preset["spreading_factor"]),
-        "coding_rate": option_int("coding_rate", preset["coding_rate"]),
-        "preamble_length": preamble_length,
-        "sync_word": sync_word,
-    }
-    map_region = option_str("map_region", option_str("region", "PAR")).upper()
-
-    config = {
-        "radio_type": radio_type,
+def default_config():
+    return {
+        "radio_type": "sx1262",
         "repeater": {
-            "node_name": option_str("node_name", "pyMC Repeater"),
+            "node_name": "pyMC Repeater",
             "mode": "forward",
-            "latitude": option_float("latitude", 0.0),
-            "longitude": option_float("longitude", 0.0),
-            "country": country,
-            "identity_file": identity_file,
-            "owner_info": option_str("public_name", ""),
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country": "FR",
+            "identity_file": f"{persistent_root}/identity.key",
+            "owner_info": "",
             "cache_ttl": 3600,
             "max_flood_hops": 64,
             "use_score_for_tx": False,
@@ -452,7 +168,7 @@ def generated_config():
             },
             "security": {
                 "max_clients": 1,
-                "admin_password": option_str("admin_password", "change_me"),
+                "admin_password": "change_me",
                 "guest_password": "",
                 "allow_read_only": False,
                 "jwt_secret": "",
@@ -472,18 +188,26 @@ def generated_config():
             "vid": 0x1A86,
             "pid": 0x5512,
         },
-        "radio": radio,
+        "radio": {
+            "frequency": 869618000,
+            "tx_power": 14,
+            "bandwidth": 62500,
+            "spreading_factor": 8,
+            "coding_rate": 8,
+            "preamble_length": 17,
+            "sync_word": 13380,
+        },
         "kiss": {
-            "port": option_str("kiss_port", "/dev/ttyUSB0"),
-            "baud_rate": option_int("kiss_baud_rate", 115200),
+            "port": "/dev/ttyUSB0",
+            "baud_rate": 115200,
         },
         "pymc_tcp": {
-            "host": option_str("pymc_tcp_host", ""),
-            "port": option_int("pymc_tcp_port", 5055),
-            "token": option_str("pymc_tcp_token", ""),
-            "connect_timeout": option_float("pymc_tcp_connect_timeout", 5.0),
-            "lbt_enabled": option_bool("pymc_tcp_lbt_enabled", True),
-            "lbt_max_attempts": option_int("pymc_tcp_lbt_max_attempts", 5),
+            "host": "",
+            "port": 5055,
+            "token": "",
+            "connect_timeout": 5.0,
+            "lbt_enabled": True,
+            "lbt_max_attempts": 5,
         },
         "sx1262": {
             "bus_id": 0,
@@ -516,8 +240,8 @@ def generated_config():
             },
         },
         "mqtt_brokers": {
-            "iata_code": map_region,
-            "country": country,
+            "iata_code": "PAR",
+            "country": "FR",
             "status_interval": 300,
             "owner": "",
             "email": "",
@@ -525,9 +249,9 @@ def generated_config():
         },
         "mqtt": {},
         "glass": {
-            "enabled": bool(options.get("glass_enabled", False)),
-            "base_url": option_str("glass_base_url", "http://localhost:8080"),
-            "inform_interval_seconds": option_int("glass_inform_interval_seconds", 30),
+            "enabled": False,
+            "base_url": "http://localhost:8080",
+            "inform_interval_seconds": 30,
             "request_timeout_seconds": 10,
             "verify_tls": True,
             "api_token": "",
@@ -538,7 +262,7 @@ def generated_config():
             "port": 8001,
         },
         "logging": {
-            "level": option_str("log_level", "info").upper(),
+            "level": "INFO",
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         },
         "web": {
@@ -546,42 +270,17 @@ def generated_config():
             "cors_enabled": False,
         },
     }
-    normalize_mqtt_config(config)
-    return enforce_wrapper_fields(config)
 
 
-raw_config = option_str("config_yaml", "").strip()
-if raw_config:
-    try:
-        config = yaml.safe_load(raw_config) or {}
-    except Exception as exc:
-        print(f"Invalid config_yaml option: {exc}", file=sys.stderr)
-        raise
-    enforced_config, added_defaults = apply_wrapper_defaults(config)
-    write_config(enforced_config)
-    action = "wrote config_yaml option to persistent config and merged missing defaults"
-elif config_path.exists():
-    with config_path.open("r", encoding="utf-8") as handle:
-        config = yaml.safe_load(handle) or {}
-    enforced_config, added_defaults = apply_wrapper_defaults(copy.deepcopy(config))
-    enforced_config = apply_managed_radio_options(enforced_config)
-    if enforced_config != config:
-        write_config(enforced_config)
-        action = "reused existing persistent config and applied managed radio options/defaults/runtime fields"
-    else:
-        action = "reused existing persistent config"
+if config_path.exists():
+    print(f"Using existing pyMC Repeater config unchanged: {config_path}")
 else:
-    write_config(generated_config())
-    action = "created persistent config from add-on options"
-    added_defaults = []
+    write_config(default_config())
+    print(f"Created default pyMC Repeater config: {config_path}")
 
-identity_path = config_root / "identity.key"
+identity_path = config_path.parent / "identity.key"
 if identity_path.exists():
     identity_path.chmod(0o600)
-
-print(action)
-if added_defaults:
-    print("Added default config keys: " + ", ".join(added_defaults))
 PY
 )"
 
@@ -625,18 +324,18 @@ gpiochip = (
 if radio_type == "sx1262" and gpiochip == "/dev/gpiochip0" and not os.path.exists(gpiochip):
     print(
         "Configured radio_type=sx1262 requires /dev/gpiochip0, but /dev/gpiochip0 is not "
-        "available in this Home Assistant add-on container. Use KISS/serial config or expose "
-        "the GPIO device."
+        "available in this Home Assistant add-on container. Edit "
+        "/config/pymc-repeater/config.yaml to use KISS/serial config or expose the GPIO device."
     )
     sys.exit(1)
 
 if radio_type == "pymc_tcp":
     pymc_tcp_config = config.get("pymc_tcp") or {}
     if not isinstance(pymc_tcp_config, dict):
-        print("Configured radio_type=pymc_tcp requires a pymc_tcp mapping.")
+        print("Configured radio_type=pymc_tcp requires a pymc_tcp mapping in /config/pymc-repeater/config.yaml.")
         sys.exit(1)
     if not str(pymc_tcp_config.get("host", "")).strip():
-        print("Configured radio_type=pymc_tcp requires pymc_tcp.host.")
+        print("Configured radio_type=pymc_tcp requires pymc_tcp.host in /config/pymc-repeater/config.yaml.")
         sys.exit(1)
 
 print("ok")

@@ -33,7 +33,8 @@ Allowed wrapper behavior:
 - Home Assistant repository metadata and add-on metadata in `repository.json` and `config.yaml`.
 - Container build glue that installs upstream from documented repositories and refs without patching source.
 - s6 supervision, service startup, readiness checks, shutdown handling, and log redaction.
-- Home Assistant option handling and generated upstream config when it maps HA options to documented upstream config.
+- One-time default upstream config creation when `/config/pymc-repeater/config.yaml` is missing.
+- Preserving an existing `/config/pymc-repeater/config.yaml` unchanged on later starts.
 - Config persistence and path mapping for `/config/pymc-repeater`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater`.
 - Ingress base-path, path prefix, header, cookie, redirect, and WebSocket transport adaptation.
 - Transparent reverse proxying where upstream receives the request and upstream response content is passed through unchanged.
@@ -227,4 +228,3 @@ Done means:
 - Contract tests pass.
 - Known-good upstream versions are recorded.
 - The action plan and supporting docs clearly distinguish ingress proxying from API reimplementation.
-

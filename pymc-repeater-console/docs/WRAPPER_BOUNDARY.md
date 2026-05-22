@@ -24,7 +24,8 @@ Runtime/API status:
 - `repository.json` and Home Assistant add-on `config.yaml`.
 - Docker build glue that installs upstream from documented repos and refs.
 - s6 supervision and startup/shutdown scripts.
-- Config generation from Home Assistant options when the result is a normal upstream config file.
+- One-time default config creation when `/config/pymc-repeater/config.yaml` is missing.
+- Preserving an existing `/config/pymc-repeater/config.yaml` unchanged on later starts.
 - Persistence and path mapping for `/config`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater`.
 - Ingress base-path and URL prefix handling.
 - Reverse proxy headers such as `Host`, `X-Forwarded-*`, and `X-Ingress-Path`.
@@ -73,4 +74,3 @@ An exception is allowed only when all of these are true:
 - It is documented in `docs/INGRESS_PROXYING.md` or `docs/WRAPPER_ROUTES.md`.
 - Contract tests prove the exception does not hide upstream contract changes.
 - Failure is clear when upstream changes break the wrapper assumption.
-

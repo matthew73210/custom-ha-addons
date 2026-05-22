@@ -10,7 +10,24 @@ DIRECT_PORT="8000"
 INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
-LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
+LOG_LEVEL="$("${PYTHON_BIN}" - <<'PY'
+import pathlib
+
+import yaml
+
+config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+try:
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+except Exception:
+    config = {}
+
+level = str((config.get("logging") or {}).get("level", "INFO")).upper()
+if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+    level = "INFO"
+print(level)
+PY
+)"
 DEBUG_LOG="false"
 if [ "${LOG_LEVEL}" = "DEBUG" ]; then
   DEBUG_LOG="true"
@@ -19,7 +36,7 @@ fi
 s6-svc -O /run/service/pymc-repeater 2>/dev/null || true
 
 log_redacted_config() {
-  bashio::log.info "Final generated ${CONFIG_PATH} (secrets redacted):"
+  bashio::log.info "Persisted ${CONFIG_PATH} (secrets redacted):"
   "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
 import pathlib
 
