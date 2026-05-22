@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.23-dev
+
+- Reduced fragile ingress response rewrites by removing one hardcoded Console history bundle rewrite and the unnecessary Carto tile JSON rewrite.
+- Documented remaining ingress response rewrites and their wrapper-boundary classifications.
+- Added contract tests for the frontend rewrite inventory.
+- No upstream source files were changed.
+
 ## 0.2.22-dev
 
 - Removed normal-operation routing to the local substitute Console compatibility API.

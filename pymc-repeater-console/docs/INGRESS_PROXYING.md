@@ -73,57 +73,24 @@ Expected behavior:
 - A route must not be considered authorized only because an `Authorization` header or `token` query parameter exists.
 - Wrapper diagnostics, if exposed, must use a wrapper-owned namespace and documented auth behavior.
 
-## Suspicious Response Mutations
+## Response Rewrite Inventory
 
-The following behavior exists today and is not fixed by this document. It is classified as suspicious because it mutates response content or depends on upstream frontend internals.
+Phase 4 reduced but did not eliminate response rewriting. The remaining rules are documented here so future upstream frontend changes fail visibly in contract tests.
 
-### Script Injection Via `sub_filter`
+| Rewrite | Classification | Status | Reason |
+|---|---|---|---|
+| Inject `/ha-ingress-proxy.js` into Console and Repeater HTML | KEEP | Required ingress transport adaptation | Installs stable wrapper helper logic for fetch, XHR, WebSocket, Worker, EventSource, and DOM URL base-path adaptation. |
+| Inject `/ha-console-nav.js` into Console and Repeater HTML | KEEP | Wrapper UI helper | Adds navigation between Console and the preserved Repeater UI without patching upstream files on disk. |
+| Rewrite static `href="/..."`, `src="/..."`, and `action="/..."` attributes | KEEP | Required ingress transport adaptation | Parser-created static asset/form URLs may load before helper monkey-patches can affect them. |
+| Rewrite Repeater static asset URLs under `/repeater/assets/` and `/repeater/favicon.ico` | KEEP | Required `/repeater/` path adaptation | The preserved upstream Repeater UI is mounted under `/repeater/` while its asset references are root-relative. |
+| Rewrite `/api/api/*` to `/api/*` | KEEP | Path-only transport normalization | Some Repeater panels emit duplicate API prefixes. The response is still upstream-controlled. |
+| Rewrite Console `history:r(\`/\`),routes:` | REMOVE | Removed in Phase 4 | This exact minified Console history rewrite was redundant with the remaining Console basename rewrite and helper script. |
+| Rewrite Repeater `history:r(\`/\`),routes:` | DEFER | Still suspicious | Needed for the preserved Repeater UI mounted at `/repeater/`; depends on upstream minified bundle shape and is covered by contract tests. |
+| Rewrite Console `F.jsx(E7,{children:F.jsx(Die,{})})` | DEFER | Still suspicious | Needed to give the Console router an ingress basename; depends on upstream minified bundle shape and is covered by contract tests. |
+| Rewrite Carto basemap JSON URLs | DEFER | Browser/ingress same-origin exception | Map style JSON embeds absolute Carto URLs. The same-origin proxy keeps map assets loadable under ingress. |
+| Rewrite Carto tile proxy responses | REMOVE | Removed in Phase 4 | Tile responses are not the basemap style JSON that needs embedded URL rewriting. |
 
-Current Nginx behavior injects:
-
-- `/ha-ingress-proxy.js`
-- `/ha-console-nav.js`
-
-Reason:
-
-- Enables ingress URL adaptation and wrapper navigation without patching files on disk.
-
-Risk:
-
-- Mutates upstream HTML/JS responses.
-- May break when upstream frontend structure changes.
-- Must be documented and contract-tested until removed or replaced by upstream-supported base-path configuration.
-
-### Hardcoded Minified Bundle Rewrites
-
-Current Nginx behavior rewrites hardcoded frontend snippets such as:
-
-- `history:r(\`/\`),routes:`
-- `F.jsx(E7,{children:F.jsx(Die,{})})`
-
-Reason:
-
-- Attempts to make upstream frontend routing work under Home Assistant ingress and `/repeater/`.
-
-Risk:
-
-- Depends on minified bundle internals.
-- Can silently stop working when upstream Console or Repeater frontend changes.
-- Should be reduced in Phase 4 and replaced with path-level proxying or upstream-supported base-path handling where possible.
-
-### Carto JSON URL Rewriting
-
-Current Nginx behavior proxies Carto basemap and tile requests through same-origin wrapper routes and rewrites embedded JSON URLs.
-
-Reason:
-
-- Allows map assets to load under ingress and browser same-origin constraints.
-
-Risk:
-
-- Mutates third-party JSON responses.
-- Is not an upstream pyMC API, but still increases the wrapper content-rewrite surface.
-- Should remain only if required, with tests documenting exactly what is rewritten.
+Remaining `sub_filter` rules are asserted by `tests/contract/test_frontend_rewrites.py`. Adding, removing, or changing one requires updating this document and the explicit test inventory.
 
 ## Forbidden Ingress Claims
 

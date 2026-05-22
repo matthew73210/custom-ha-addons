@@ -42,6 +42,7 @@ If the image needs real radio hardware or a site-specific config to stay running
 - `test_container_smoke.py`: container starts, HTTP routes become reachable, startup does not crash immediately, and build metadata exists when Docker access is available.
 - `test_routes.py`: Console, Repeater, helper scripts, duplicate `/api/api/*` normalization, and default proxy behavior.
 - `test_ingress_paths.py`: simulated Home Assistant ingress headers, helper assets, redirect prefix behavior, and WebSocket upgrade path behavior.
+- `test_frontend_rewrites.py`: response-rewrite inventory checks for removed minified rewrites, remaining `sub_filter` rules, helper scripts, and Carto proxy behavior.
 - `test_upstream_api_contract.py`: upstream API boundary checks that verify normal traffic does not reach the quarantined compatibility API.
 - `test_config_persistence.py`: persisted config preservation, one-time default creation, and removal of Home Assistant runtime option references from startup scripts.
 
@@ -55,3 +56,7 @@ The API contract tests cover:
 - wrapper code cannot insert/default packet telemetry fields through the normal packet path;
 - LBT fields, if present, come from upstream rather than wrapper SQLite/default logic;
 - live analytics and bulk packet responses do not show wrapper-generated compatibility payloads.
+
+## Frontend Rewrite Tests
+
+The frontend rewrite tests are source-level guardrails. They assert that the Phase 4 removals stay removed, and that every remaining `sub_filter` rule is part of an explicit inventory. The remaining hardcoded minified rewrites are deferred exceptions for router basename support; changing upstream bundles should fail these tests clearly instead of silently changing wrapper behavior.

@@ -138,10 +138,12 @@ Deliverable: no local substitute upstream APIs in normal operation.
 
 Goal: keep ingress support while reducing response mutation.
 
-- Replace hardcoded minified bundle rewrites with path-level proxying where possible.
-- Keep only ingress/base-path adaptations that are strictly necessary.
-- Document every remaining response rewrite in `docs/INGRESS_PROXYING.md`.
-- Add contract tests that fail when upstream frontend bundle structure changes.
+- Removed the redundant Console `history:r(window.PyMCIngressBasePath...)` minified rewrite.
+- Removed response-body rewriting from the Carto tile proxy.
+- Kept the Repeater router basename rewrite and Console router basename rewrite as documented deferred exceptions.
+- Kept ingress/base-path adaptations that are still required for static assets, helper script injection, redirects, cookies, browser request URLs, WebSockets, Workers, and map style JSON.
+- Documented every remaining response rewrite in `docs/INGRESS_PROXYING.md`.
+- Added contract tests that fail when the rewrite inventory or remaining upstream bundle snippets change.
 - Prefer upstream build/config support for base paths if available.
 
 Deliverable: smaller, documented, tested response rewrite surface.
