@@ -2,6 +2,8 @@
 set -euo pipefail
 
 CONFIG_PATH="/etc/pymc_repeater/config.yaml"
+UPSTREAM_METADATA_PATH="/usr/share/pymc-repeater-console/upstream-build-info.json"
+PYTHON_BIN="/opt/venv/bin/python3"
 BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8001"
 DIRECT_HOST="127.0.0.1"
@@ -9,7 +11,24 @@ DIRECT_PORT="8000"
 INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
-LOG_LEVEL="$(jq -r '(.log_level // "info") | ascii_upcase' /data/options.json)"
+LOG_LEVEL="$("${PYTHON_BIN}" - <<'PY'
+import pathlib
+
+import yaml
+
+config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+try:
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+except Exception:
+    config = {}
+
+level = str((config.get("logging") or {}).get("level", "INFO")).upper()
+if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+    level = "INFO"
+print(level)
+PY
+)"
 DEBUG_LOG="false"
 if [ "${LOG_LEVEL}" = "DEBUG" ]; then
   DEBUG_LOG="true"
@@ -18,8 +37,8 @@ fi
 s6-svc -O /run/service/pymc-repeater 2>/dev/null || true
 
 log_redacted_config() {
-  bashio::log.info "Final generated ${CONFIG_PATH} (secrets redacted):"
-  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
+  bashio::log.info "Persisted ${CONFIG_PATH} (secrets redacted):"
+  "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
 import pathlib
 
 import yaml
@@ -60,7 +79,7 @@ PY
 }
 
 log_storage_diagnostics() {
-  python3 - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
+  "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
 import pathlib
 import sqlite3
 
@@ -199,7 +218,7 @@ notify_ready() {
 }
 
 http_probe() {
-  python3 - "$1" <<'PY'
+  "${PYTHON_BIN}" - "$1" <<'PY'
 import sys
 import urllib.error
 import urllib.request
@@ -220,6 +239,65 @@ if status < 500:
 else:
     print(f"HTTP {status}")
     sys.exit(1)
+PY
+}
+
+runtime_support_sanity() {
+  (
+    cd /
+    "${PYTHON_BIN}" - <<'PY'
+import inspect
+
+import repeater.config as c
+from pymc_core.hardware.tcp_radio import TCPLoRaRadio
+
+src = inspect.getsource(c)
+assert "pymc_tcp" in src, "Installed pyMC_Repeater does not contain pymc_tcp support"
+assert "pymc_usb" in src, "Installed pyMC_Repeater does not contain pymc_usb support"
+print(f"pymc_tcp and pymc_usb support present in installed repeater.config: {c.__file__}")
+print(f"TCPLoRaRadio import OK: {TCPLoRaRadio}")
+PY
+  )
+}
+
+log_upstream_metadata() {
+  if [ ! -f "${UPSTREAM_METADATA_PATH}" ]; then
+    bashio::log.warning "Upstream build metadata not found at ${UPSTREAM_METADATA_PATH}."
+    return 0
+  fi
+
+  "${PYTHON_BIN}" - "${UPSTREAM_METADATA_PATH}" <<'PY' | while IFS= read -r line; do bashio::log.info "upstream | ${line}"; done
+import json
+import pathlib
+import sys
+
+metadata_path = pathlib.Path(sys.argv[1])
+try:
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"unable to read {metadata_path}: {exc}")
+    raise SystemExit(0)
+
+repeater = metadata.get("pymc_repeater") or {}
+core = metadata.get("pymc_core") or {}
+console = metadata.get("pymc_console_dist") or {}
+
+print(
+    "pyMC Repeater requested_ref="
+    f"{repeater.get('requested_ref', 'unknown')} "
+    f"resolved_sha={repeater.get('resolved_sha', 'unknown')}"
+)
+print(
+    "pyMC_core requested_ref="
+    f"{core.get('requested_ref', 'unknown')} "
+    f"resolved_sha={core.get('resolved_sha', 'unknown')}"
+)
+print(
+    "pyMC Console dist requested_ref="
+    f"{console.get('requested_ref', 'unknown')} "
+    f"resolved_sha={console.get('resolved_sha', 'unknown')} "
+    f"version={console.get('version') or 'unknown'}"
+)
 PY
 }
 
@@ -283,13 +361,15 @@ halt_addon() {
 bashio::log.info "Selected internal backend entrypoint: http://${BACKEND_HOST}:${BACKEND_PORT}"
 bashio::log.info "Selected direct wrapper entrypoint: http://${DIRECT_HOST}:${DIRECT_PORT}"
 bashio::log.info "Selected ingress entrypoint: http://0.0.0.0:${INGRESS_PORT}"
+log_upstream_metadata
 if [ "${DEBUG_LOG}" = "true" ]; then
   log_redacted_config
 fi
 log_storage_diagnostics
+runtime_support_sanity | while IFS= read -r line; do bashio::log.info "runtime | ${line}"; done
 
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."
-python3 -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
+"${PYTHON_BIN}" -m repeater.main --config "${CONFIG_PATH}" --log-level "${LOG_LEVEL}" &
 BACKEND_PID="$!"
 trap 'stop_backend; exit 0' INT TERM
 
@@ -299,7 +379,6 @@ bashio::log.info "pyMC Repeater backend is accepting HTTP"
 
 wait_for_probe "Direct wrapper HTTP" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/"
 wait_for_probe "Direct wrapper API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/stats"
-wait_for_probe "Direct wrapper graph compatibility API" http_probe "http://${DIRECT_HOST}:${DIRECT_PORT}/api/analytics/debug"
 bashio::log.info "Direct wrapper entrypoint is accepting HTTP"
 
 wait_for_probe "Ingress HTTP" http_probe "http://${INGRESS_HOST}:${INGRESS_PORT}/"

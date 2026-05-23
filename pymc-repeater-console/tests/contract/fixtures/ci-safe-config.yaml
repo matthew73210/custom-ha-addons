@@ -1,0 +1,63 @@
+radio_type: none
+repeater:
+  node_name: pyMC Contract Test
+  mode: no_tx
+  latitude: 0.0
+  longitude: 0.0
+  country: FR
+  identity_file: /config/pymc-repeater/identity.key
+  owner_info: ""
+  cache_ttl: 3600
+  max_flood_hops: 64
+  use_score_for_tx: false
+  score_threshold: 0.3
+  send_advert_interval_hours: 0
+  allow_discovery: false
+  security:
+    max_clients: 1
+    admin_password: change_me
+    guest_password: ""
+    allow_read_only: false
+    jwt_secret: ""
+    jwt_expiry_minutes: 60
+mesh:
+  unscoped_flood_allow: true
+  path_hash_mode: 0
+  loop_detect: minimal
+identities:
+  room_servers: []
+  companions: []
+radio:
+  frequency: 869618000
+  tx_power: 14
+  bandwidth: 62500
+  spreading_factor: 8
+  coding_rate: 8
+  preamble_length: 16
+  sync_word: 18
+storage:
+  storage_dir: /config/pymc-repeater
+mqtt_brokers:
+  iata_code: PAR
+  country: FR
+  status_interval: 300
+  owner: ""
+  email: ""
+  brokers: []
+mqtt: {}
+glass:
+  enabled: false
+  base_url: http://localhost:8080
+  inform_interval_seconds: 30
+  request_timeout_seconds: 10
+  verify_tls: true
+  api_token: ""
+  cert_store_dir: /config/pymc-repeater/glass
+http:
+  host: 127.0.0.1
+  port: 8001
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+web:
+  web_path: /opt/pymc_console/web/html
