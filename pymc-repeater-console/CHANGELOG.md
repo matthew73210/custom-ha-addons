@@ -1,7 +1,9 @@
 # Changelog
 
-## 0.2.28-dev
+## 0.3.0
 
+- Brings the app onto upstream `main` refs after the Phase 1-5 ingress/config work.
+- Includes upstream pyMC Repeater `main` support for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
 - Restored default pyMC Repeater, pyMC_core, and pyMC Console build refs to upstream `main` while preserving build-arg overrides.
 - Updated CI and upstream-tracking metadata to build/test the default upstream `main` refs instead of release-pinned SHAs.
 - Fixed default-ref and candidate contract-test CI startup by using a CI-safe persisted config fixture with upstream-accepted `radio_type: none`.
@@ -62,7 +64,7 @@
 - Marked current/future API wrapper-boundary expectations as `xfail` while the existing compatibility API remains in place.
 - No runtime behavior, ingress routing, compat API behavior, or config authority changed.
 
-## 0.2.18-dev
+## 0.2.x config-file-only development update
 
 - Removed Home Assistant runtime options that duplicated pyMC Repeater config.
 - pyMC Repeater runtime config now comes only from `/config/pymc-repeater/config.yaml`.
