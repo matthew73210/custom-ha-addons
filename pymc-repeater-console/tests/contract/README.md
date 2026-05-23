@@ -75,6 +75,6 @@ The frontend rewrite tests are source-level guardrails. They assert that the Pha
 Phase 5 runs the suite in two ways:
 
 - Source-level mode with `PYMC_REPEATER_CONSOLE_SKIP_DOCKER=1`. Live-container tests are skipped, while source checks still validate routing, config persistence, and rewrite inventories.
-- Live-container mode against an amd64 image built from pinned upstream refs. These tests exercise startup, routes, ingress-style paths, WebSocket forwarding, and metadata checks.
+- Live-container mode against an amd64 image built from default upstream refs. These tests exercise startup, routes, ingress-style paths, WebSocket forwarding, and metadata checks.
 
-Scheduled/manual upstream-candidate CI builds a non-published amd64 image with candidate refs, then runs the same live suite. Candidate failures mean upstream drift or a contract change in the tested candidate; they do not automatically mean the pinned release image is broken.
+Scheduled/manual upstream-candidate CI builds a non-published amd64 image with candidate refs, then runs the same live suite. Candidate failures mean upstream drift or a contract change in the tested candidate; they do not automatically mean the default release image is broken.

@@ -33,8 +33,9 @@ permissions:
 env:
   ADDON_DIR: pymc-repeater-console
   IMAGE_OWNER: matthew73210
-  PYMC_REPEATER_PINNED_REF: e17d1137ab2d2d5b86d03c99523272289b7688aa
-  PYMC_CONSOLE_PINNED_REF: 2d961cef1ae1a355eb06e34fba99788d9ffca44a
+  PYMC_REPEATER_DEFAULT_REF: main
+  PYMC_CORE_DEFAULT_REF: main
+  PYMC_CONSOLE_DEFAULT_REF: main
   PYMC_REPEATER_CANDIDATE_REF: ${{ vars.PYMC_REPEATER_CANDIDATE_REF || 'main' }}
   PYMC_CONSOLE_CANDIDATE_REF: ${{ vars.PYMC_CONSOLE_CANDIDATE_REF || 'main' }}
 
@@ -193,13 +194,14 @@ jobs:
             --build-arg BUILD_FROM=debian:bookworm-slim \
             --build-arg BUILD_ARCH=amd64 \
             --build-arg BUILD_VERSION=ci-check \
-            --build-arg PYMC_REPEATER_REF="${PYMC_REPEATER_PINNED_REF}" \
-            --build-arg PYMC_CONSOLE_REF="${PYMC_CONSOLE_PINNED_REF}" \
+            --build-arg PYMC_REPEATER_REF="${PYMC_REPEATER_DEFAULT_REF}" \
+            --build-arg PYMC_CORE_REF="${PYMC_CORE_DEFAULT_REF}" \
+            --build-arg PYMC_CONSOLE_REF="${PYMC_CONSOLE_DEFAULT_REF}" \
             -f "${ADDON_DIR}/Dockerfile" \
             "${ADDON_DIR}"
 
   contract-tests:
-    name: Run contract tests against pinned image
+    name: Run contract tests against default upstream image
     runs-on: ubuntu-latest
     needs:
       - validate
@@ -231,15 +233,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build pinned upstream image for contract tests
+      - name: Build default upstream image for contract tests
         run: |
           docker build \
             --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm \
             --build-arg BUILD_ARCH=amd64 \
             --build-arg BUILD_VERSION="${{ steps.addon.outputs.version }}" \
-            --build-arg PYMC_REPEATER_REF="${PYMC_REPEATER_PINNED_REF}" \
-            --build-arg PYMC_CONSOLE_REF="${PYMC_CONSOLE_PINNED_REF}" \
-            -t pymc-repeater-console:contract-pinned \
+            --build-arg PYMC_REPEATER_REF="${PYMC_REPEATER_DEFAULT_REF}" \
+            --build-arg PYMC_CORE_REF="${PYMC_CORE_DEFAULT_REF}" \
+            --build-arg PYMC_CONSOLE_REF="${PYMC_CONSOLE_DEFAULT_REF}" \
+            -t pymc-repeater-console:contract-default \
             -f "${ADDON_DIR}/Dockerfile" \
             "${ADDON_DIR}"
 
@@ -257,17 +260,17 @@ jobs:
           echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
           echo "CI contract config: ${config_dir}/pymc-repeater/config.yaml"
 
-      - name: Show pinned upstream build metadata
+      - name: Show default upstream build metadata
         run: |
           docker run --rm \
             -v "${{ steps.contract_config.outputs.config_dir }}:/config:ro" \
             --entrypoint python3 \
-            pymc-repeater-console:contract-pinned \
+            pymc-repeater-console:contract-default \
             -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
 
-      - name: Run live contract tests against pinned image
+      - name: Run live contract tests against default upstream image
         env:
-          PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-pinned
+          PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-default
           PYMC_REPEATER_CONSOLE_CONFIG_DIR: ${{ steps.contract_config.outputs.config_dir }}
           PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
         run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
@@ -282,7 +285,7 @@ jobs:
           done
 
   build:
-    name: Build and publish pinned upstream image (${{ matrix.arch }})
+    name: Build and publish default upstream image (${{ matrix.arch }})
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs:
@@ -333,13 +336,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Show pinned upstream refs
+      - name: Show default upstream refs
         run: |
-          echo "Publishing from pinned upstream refs only."
-          echo "PYMC_REPEATER_REF=${PYMC_REPEATER_PINNED_REF}"
-          echo "PYMC_CONSOLE_REF=${PYMC_CONSOLE_PINNED_REF}"
+          echo "Publishing from default upstream refs."
+          echo "PYMC_REPEATER_REF=${PYMC_REPEATER_DEFAULT_REF}"
+          echo "PYMC_CORE_REF=${PYMC_CORE_DEFAULT_REF}"
+          echo "PYMC_CONSOLE_REF=${PYMC_CONSOLE_DEFAULT_REF}"
 
-      - name: Build and push pinned add-on image
+      - name: Build and push default add-on image
         uses: docker/build-push-action@v7
         with:
           context: ${{ env.ADDON_DIR }}
@@ -349,8 +353,9 @@ jobs:
             BUILD_FROM=${{ matrix.build_from }}
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_VERSION=${{ steps.addon.outputs.version }}
-            PYMC_REPEATER_REF=${{ env.PYMC_REPEATER_PINNED_REF }}
-            PYMC_CONSOLE_REF=${{ env.PYMC_CONSOLE_PINNED_REF }}
+            PYMC_REPEATER_REF=${{ env.PYMC_REPEATER_DEFAULT_REF }}
+            PYMC_CORE_REF=${{ env.PYMC_CORE_DEFAULT_REF }}
+            PYMC_CONSOLE_REF=${{ env.PYMC_CONSOLE_DEFAULT_REF }}
           tags: |
             ghcr.io/${{ env.IMAGE_OWNER }}/pymc-repeater-console-${{ matrix.arch }}:${{ steps.addon.outputs.version }}
             ghcr.io/${{ env.IMAGE_OWNER }}/pymc-repeater-console-${{ matrix.arch }}:latest
@@ -358,8 +363,9 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.addon.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.pymc_repeater.ref=${{ env.PYMC_REPEATER_PINNED_REF }}
-            org.opencontainers.image.pymc_console.ref=${{ env.PYMC_CONSOLE_PINNED_REF }}
+            org.opencontainers.image.pymc_repeater.ref=${{ env.PYMC_REPEATER_DEFAULT_REF }}
+            org.opencontainers.image.pymc_core.ref=${{ env.PYMC_CORE_DEFAULT_REF }}
+            org.opencontainers.image.pymc_console.ref=${{ env.PYMC_CONSOLE_DEFAULT_REF }}
           cache-from: type=gha,scope=pymc-repeater-console-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=pymc-repeater-console-${{ matrix.arch }}
 
@@ -453,7 +459,7 @@ jobs:
         if: failure()
         run: |
           echo "Upstream candidate drift or contract change detected."
-          echo "Pinned release builds are not automatically broken by this result."
+          echo "Default release builds are not automatically broken by this result."
           echo "Candidate pyMC Repeater ref: ${{ steps.candidate.outputs.pymc_repeater_ref }}"
           echo "Candidate pyMC Console dist ref: ${{ steps.candidate.outputs.pymc_console_ref }}"
           docker ps -a --filter "name=pymc-contract-" --format "{{.Names}}" | while read -r name; do

@@ -175,6 +175,23 @@ def test_default_config_contains_eu_radio_defaults_once(tmp_path):
     assert config_path.read_text(encoding="utf-8") == user_content
 
 
+def test_default_config_contains_pymc_usb_and_tcp_sections(tmp_path):
+    config_path = tmp_path / "pymc-repeater/config.yaml"
+
+    run_config_action(config_path)
+    content = config_path.read_text(encoding="utf-8")
+
+    assert "pymc_usb:\n" in content
+    assert "  port: /dev/ttyACM0\n" in content
+    assert "  baudrate: 921600\n" in content
+    assert "pymc_tcp:\n" in content
+    assert '  host: ""\n' in content
+    assert "  port: 5055\n" in content
+    assert "  connect_timeout: 5.0\n" in content
+    assert "  lbt_enabled: true\n" in content
+    assert "  lbt_max_attempts: 5\n" in content
+
+
 def test_removed_home_assistant_runtime_options_are_not_referenced_by_startup_scripts():
     startup_text = "\n".join(
         path.read_text(encoding="utf-8")

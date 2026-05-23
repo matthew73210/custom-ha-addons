@@ -8,7 +8,7 @@
 
 ## Upstream Support
 
-The pinned pyMC Repeater upstream supports the pymc-usb-compatible modem family in two ways:
+The default pyMC Repeater upstream `main` ref supports the pymc-usb-compatible modem family in two ways:
 
 - Local USB serial mode uses `radio_type: pymc_usb` and the `pymc_usb` config section.
 - TCP/IP mode to a remote pymc-usb-compatible firmware endpoint uses `radio_type: pymc_tcp` and the `pymc_tcp` config section.
@@ -59,7 +59,7 @@ Upstream pyMC Repeater does not accept `host`, `ip`, `tcp`, `socket`, `url`, or 
 radio_type: pymc_tcp
 
 pymc_tcp:
-  host: 192.168.1.49
+  host: "192.168.1.49"
   port: 5055
   token: ""
   connect_timeout: 5.0
@@ -69,7 +69,7 @@ pymc_tcp:
 
 Use `pymc_tcp.host` for the remote device IP address or hostname. Use `pymc_tcp.port` for the remote TCP port; pymc-usb firmware commonly uses `5055`. `baudrate` is not used by upstream in TCP/IP mode because there is no local serial link.
 
-Investigation note: upstream pyMC Repeater `dev` at `85f282357ca6cd6516d961eb8650ecc2a6286f74` and pinned `main` at `e17d1137ab2d2d5b86d03c99523272289b7688aa` both route TCP/IP pymc-usb-compatible firmware through `radio_type: pymc_tcp`, not through extra network keys under `pymc_usb`.
+Investigation note: upstream pyMC Repeater `main` routes TCP/IP pymc-usb-compatible firmware through `radio_type: pymc_tcp`, not through extra network keys under `pymc_usb`.
 
 ## Home Assistant Add-On Boundary
 

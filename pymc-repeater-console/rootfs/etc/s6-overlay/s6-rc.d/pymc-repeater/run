@@ -253,7 +253,8 @@ from pymc_core.hardware.tcp_radio import TCPLoRaRadio
 
 src = inspect.getsource(c)
 assert "pymc_tcp" in src, "Installed pyMC_Repeater does not contain pymc_tcp support"
-print(f"pymc_tcp support present in installed repeater.config: {c.__file__}")
+assert "pymc_usb" in src, "Installed pyMC_Repeater does not contain pymc_usb support"
+print(f"pymc_tcp and pymc_usb support present in installed repeater.config: {c.__file__}")
 print(f"TCPLoRaRadio import OK: {TCPLoRaRadio}")
 PY
   )
@@ -278,12 +279,18 @@ except Exception as exc:
     raise SystemExit(0)
 
 repeater = metadata.get("pymc_repeater") or {}
+core = metadata.get("pymc_core") or {}
 console = metadata.get("pymc_console_dist") or {}
 
 print(
     "pyMC Repeater requested_ref="
     f"{repeater.get('requested_ref', 'unknown')} "
     f"resolved_sha={repeater.get('resolved_sha', 'unknown')}"
+)
+print(
+    "pyMC_core requested_ref="
+    f"{core.get('requested_ref', 'unknown')} "
+    f"resolved_sha={core.get('resolved_sha', 'unknown')}"
 )
 print(
     "pyMC Console dist requested_ref="

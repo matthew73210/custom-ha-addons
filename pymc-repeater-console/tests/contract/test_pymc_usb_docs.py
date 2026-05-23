@@ -47,7 +47,7 @@ def test_pymc_usb_tcp_ip_example_uses_upstream_pymc_tcp_schema():
     tcp = next(block for block in blocks if "radio_type: pymc_tcp" in block)
 
     assert "pymc_tcp:" in tcp
-    assert "  host: 192.168.1.49" in tcp
+    assert '  host: "192.168.1.49"' in tcp
     assert "  port: 5055" in tcp
     assert "  token: \"\"" in tcp
     assert "  connect_timeout: 5.0" in tcp

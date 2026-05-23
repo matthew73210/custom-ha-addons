@@ -201,6 +201,12 @@ def default_config():
             "port": "/dev/ttyUSB0",
             "baud_rate": 115200,
         },
+        "pymc_usb": {
+            "port": "/dev/ttyACM0",
+            "baudrate": 921600,
+            "lbt_enabled": True,
+            "lbt_max_attempts": 5,
+        },
         "pymc_tcp": {
             "host": "",
             "port": 5055,
