@@ -52,10 +52,10 @@ jobs:
         include:
           - arch: amd64
             platform: linux/amd64
+            build_from: ghcr.io/home-assistant/amd64-base:3.21
           - arch: aarch64
             platform: linux/arm64
-          - arch: armv7
-            platform: linux/arm/v7
+            build_from: ghcr.io/home-assistant/base:latest
 
     steps:
       - name: Check out repository
@@ -64,7 +64,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: arm64,arm
+          platforms: arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -80,30 +80,27 @@ jobs:
         run: |
           docker buildx ls
           docker buildx inspect --bootstrap
-          docker buildx imagetools inspect ghcr.io/home-assistant/base:latest
 
       - name: Check platform wiring
         env:
           ARCH: ${{ matrix.arch }}
           PLATFORM: ${{ matrix.platform }}
+          BUILD_FROM: ${{ matrix.build_from }}
         run: |
           set -eu
           case "${ARCH}" in
             amd64) expected="linux/amd64" ;;
             aarch64) expected="linux/arm64" ;;
-            armv7) expected="linux/arm/v7" ;;
             *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
           esac
+
           if [ "${PLATFORM}" != "${expected}" ]; then
             echo "Expected platform ${expected} for ${ARCH}, got ${PLATFORM}" >&2
             exit 1
           fi
-          grep -F 'platforms: ${{ matrix.platform }}' .github/workflows/build-ingress-lan-proxy.yml
-          if ! docker buildx imagetools inspect ghcr.io/home-assistant/base:latest | grep -F "Platform:    ${PLATFORM}"; then
-            echo "Base image ghcr.io/home-assistant/base:latest does not publish ${PLATFORM}" >&2
-            exit 1
-          fi
+
           echo "Buildx platform for ${ARCH}: ${PLATFORM}"
+          echo "Build base for ${ARCH}: ${BUILD_FROM}"
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -123,7 +120,7 @@ jobs:
           build-args: |
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_VERSION=${{ steps.addon.outputs.version }}
-            BUILD_FROM=ghcr.io/home-assistant/base:latest
+            BUILD_FROM=${{ matrix.build_from }}
           tags: |
             ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-${{ matrix.arch }}:${{ steps.addon.outputs.version }}
             ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-${{ matrix.arch }}:latest

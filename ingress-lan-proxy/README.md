@@ -52,4 +52,4 @@ Home Assistant pulls prebuilt images from GitHub Container Registry:
 ghcr.io/matthew73210/ingress-lan-proxy-{arch}
 ```
 
-The GitHub Actions workflow publishes `amd64`, `aarch64`, and `armv7` images tagged with the add-on version plus `latest`.
+The GitHub Actions workflow publishes `amd64` and `aarch64` images tagged with the add-on version plus `latest`.
