@@ -1,0 +1,32 @@
+name: "Ingress LAN Proxy"
+version: "0.1.1"
+slug: "ingress_lan_proxy"
+description: "Proxy a LAN web UI through Home Assistant Ingress"
+url: "https://github.com/matthew73210/custom-ha-addons/tree/main/ingress-lan-proxy"
+arch:
+  - amd64
+  - aarch64
+  - armv7
+image: "ghcr.io/matthew73210/ingress-lan-proxy-{arch}"
+startup: services
+boot: auto
+init: false
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base:latest"
+  aarch64: "ghcr.io/home-assistant/aarch64-base:latest"
+  armv7: "ghcr.io/home-assistant/armv7-base:latest"
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: "mdi:web"
+panel_title: "LAN Proxy"
+options:
+  target_host: "192.168.1.50"
+  target_port: 80
+  target_scheme: "http"
+  verify_ssl: false
+schema:
+  target_host: str
+  target_port: port
+  target_scheme: list(http|https)
+  verify_ssl: bool

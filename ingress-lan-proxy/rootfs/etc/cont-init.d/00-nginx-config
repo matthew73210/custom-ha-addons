@@ -1,0 +1,72 @@
+#!/usr/bin/with-contenv sh
+set -eu
+
+OPTIONS_FILE="/data/options.json"
+NGINX_CONF="/etc/nginx/http.d/default.conf"
+
+if [ ! -f "${OPTIONS_FILE}" ]; then
+    echo "ERROR: Missing ${OPTIONS_FILE}; Home Assistant add-on options were not mounted."
+    exit 1
+fi
+
+TARGET_HOST="$(jq -r '.target_host // ""' "${OPTIONS_FILE}")"
+TARGET_PORT="$(jq -r '.target_port // ""' "${OPTIONS_FILE}")"
+TARGET_SCHEME="$(jq -r '.target_scheme // "http"' "${OPTIONS_FILE}")"
+VERIFY_SSL="$(jq -r '.verify_ssl // false' "${OPTIONS_FILE}")"
+
+if [ -z "${TARGET_HOST}" ] || [ "${TARGET_HOST}" = "null" ]; then
+    echo "ERROR: target_host must not be empty."
+    exit 1
+fi
+
+if [ -z "${TARGET_PORT}" ] || [ "${TARGET_PORT}" = "null" ]; then
+    echo "ERROR: target_port must not be empty."
+    exit 1
+fi
+
+case "${TARGET_SCHEME}" in
+    http|https)
+        ;;
+    *)
+        echo "ERROR: target_scheme must be either http or https."
+        exit 1
+        ;;
+esac
+
+SSL_VERIFY_DIRECTIVE=""
+if [ "${TARGET_SCHEME}" = "https" ] && [ "${VERIFY_SSL}" = "false" ]; then
+    SSL_VERIFY_DIRECTIVE="        proxy_ssl_verify off;"
+fi
+
+echo "Configuring Ingress LAN Proxy target: ${TARGET_SCHEME}://${TARGET_HOST}:${TARGET_PORT}"
+
+cat > "${NGINX_CONF}" <<EOF
+server {
+    listen 8099;
+    resolver 127.0.0.11 valid=30s;
+
+    location / {
+        proxy_pass ${TARGET_SCHEME}://${TARGET_HOST}:${TARGET_PORT}/;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host ${TARGET_HOST};
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-Port \$server_port;
+
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+${SSL_VERIFY_DIRECTIVE}
+    }
+}
+EOF
+
+nginx -t

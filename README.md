@@ -20,6 +20,7 @@ Home Assistant Supervisor reads the repository metadata at the root of this repo
 
 - `placeholder-addon`: a non-production placeholder used only to validate and demonstrate the repository structure.
 - `corescope`: CoreScope packaged as a Home Assistant app for MeshCore packet analysis.
+- `ingress-lan-proxy`: an Ingress-only Nginx proxy for one LAN HTTP or HTTPS web UI.
 - `pymc-repeater`: pyMC Repeater packaged as a Home Assistant app for MeshCore repeater deployments.
 - `pymc-repeater-console`: pyMC Repeater packaged with the pyMC Console dashboard as the default UI.
 

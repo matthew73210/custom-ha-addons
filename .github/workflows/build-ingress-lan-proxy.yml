@@ -1,0 +1,85 @@
+name: Build Ingress LAN Proxy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ingress-lan-proxy/**"
+      - ".github/workflows/build-ingress-lan-proxy.yml"
+  pull_request:
+    paths:
+      - "ingress-lan-proxy/**"
+      - ".github/workflows/build-ingress-lan-proxy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  ADDON_DIR: ingress-lan-proxy
+  IMAGE_OWNER: matthew73210
+  IMAGE_NAME: ingress-lan-proxy
+
+jobs:
+  validate:
+    name: Validate add-on source
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate YAML
+        run: |
+          ruby -ryaml -e 'YAML.load_file("ingress-lan-proxy/config.yaml"); puts "YAML ok: ingress-lan-proxy/config.yaml"'
+
+      - name: Validate shell scripts
+        run: |
+          sh -n ingress-lan-proxy/rootfs/etc/cont-init.d/00-nginx-config
+          sh -n ingress-lan-proxy/rootfs/etc/services.d/nginx/run
+
+  build:
+    name: Build add-on image (${{ matrix.arch }})
+    needs:
+      - validate
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            build_from: ghcr.io/home-assistant/amd64-base:latest
+          - arch: aarch64
+            build_from: ghcr.io/home-assistant/aarch64-base:latest
+          - arch: armv7
+            build_from: ghcr.io/home-assistant/armv7-base:latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read add-on version
+        id: addon
+        run: |
+          version="$(ruby -ryaml -e 'puts YAML.load_file(File.join(ENV.fetch("ADDON_DIR"), "config.yaml")).fetch("version")')"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Add-on version: ${version}"
+
+      - name: Build add-on
+        uses: home-assistant/builder/actions/build-image@2026.03.2
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: ${{ env.ADDON_DIR }}
+          cosign: "false"
+          image: ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-${{ matrix.arch }}
+          image-tags: |
+            ${{ steps.addon.outputs.version }}
+            latest
+          push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+          version: ${{ steps.addon.outputs.version }}
+          build-args: |
+            BUILD_FROM=${{ matrix.build_from }}
