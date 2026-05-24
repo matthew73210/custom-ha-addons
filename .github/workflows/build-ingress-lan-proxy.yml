@@ -51,11 +51,11 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            build_from: ghcr.io/home-assistant/amd64-base:latest
+            build_from: ghcr.io/home-assistant/amd64-base:3.21
           - arch: aarch64
-            build_from: ghcr.io/home-assistant/aarch64-base:latest
+            build_from: ghcr.io/home-assistant/aarch64-base:3.21
           - arch: armv7
-            build_from: ghcr.io/home-assistant/armv7-base:latest
+            build_from: ghcr.io/home-assistant/armv7-base:3.21
 
     steps:
       - name: Check out repository
