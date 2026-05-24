@@ -1,9 +1,11 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.21
+ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.1.3
-ARG BUILD_ARCH=amd64
+ARG BUILD_VERSION
+ARG BUILD_ARCH
+
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 LABEL \
   io.hass.version="${BUILD_VERSION}" \
@@ -17,7 +19,6 @@ RUN apk add --no-cache jq nginx \
 
 COPY rootfs /
 
-RUN chmod a+x \
-    /etc/cont-init.d/00-nginx-config \
-    /etc/services.d/nginx/run \
+RUN chmod +x /etc/cont-init.d/00-nginx-config \
+  && chmod +x /etc/services.d/nginx/run \
   && mkdir -p /run/nginx /etc/nginx/http.d

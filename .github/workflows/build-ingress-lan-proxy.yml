@@ -51,15 +51,23 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            build_from: ghcr.io/home-assistant/amd64-base:3.21
+            platform: linux/amd64
           - arch: aarch64
-            build_from: ghcr.io/home-assistant/aarch64-base:3.21
+            platform: linux/arm64
           - arch: armv7
-            build_from: ghcr.io/home-assistant/armv7-base:3.21
+            platform: linux/arm/v7
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,arm
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Read add-on version
         id: addon
@@ -68,18 +76,54 @@ jobs:
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "Add-on version: ${version}"
 
-      - name: Build add-on
-        uses: home-assistant/builder/actions/build-image@2026.03.2
+      - name: Debug Buildx
+        run: |
+          docker buildx ls
+          docker buildx inspect --bootstrap
+          docker buildx imagetools inspect ghcr.io/home-assistant/base:latest
+
+      - name: Check platform wiring
+        env:
+          ARCH: ${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -eu
+          case "${ARCH}" in
+            amd64) expected="linux/amd64" ;;
+            aarch64) expected="linux/arm64" ;;
+            armv7) expected="linux/arm/v7" ;;
+            *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
+          esac
+          if [ "${PLATFORM}" != "${expected}" ]; then
+            echo "Expected platform ${expected} for ${ARCH}, got ${PLATFORM}" >&2
+            exit 1
+          fi
+          grep -F 'platforms: ${{ matrix.platform }}' .github/workflows/build-ingress-lan-proxy.yml
+          if ! docker buildx imagetools inspect ghcr.io/home-assistant/base:latest | grep -F "Platform:    ${PLATFORM}"; then
+            echo "Base image ghcr.io/home-assistant/base:latest does not publish ${PLATFORM}" >&2
+            exit 1
+          fi
+          echo "Buildx platform for ${ARCH}: ${PLATFORM}"
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
         with:
-          arch: ${{ matrix.arch }}
-          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
-          context: ${{ env.ADDON_DIR }}
-          cosign: "false"
-          image: ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-${{ matrix.arch }}
-          image-tags: |
-            ${{ steps.addon.outputs.version }}
-            latest
-          push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-          version: ${{ steps.addon.outputs.version }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build add-on
+        uses: docker/build-push-action@v6
+        with:
+          context: ingress-lan-proxy
+          file: ingress-lan-proxy/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
           build-args: |
-            BUILD_FROM=${{ matrix.build_from }}
+            BUILD_ARCH=${{ matrix.arch }}
+            BUILD_VERSION=${{ steps.addon.outputs.version }}
+            BUILD_FROM=ghcr.io/home-assistant/base:latest
+          tags: |
+            ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-${{ matrix.arch }}:${{ steps.addon.outputs.version }}
+            ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-${{ matrix.arch }}:latest
