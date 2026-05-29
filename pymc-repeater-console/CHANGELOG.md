@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+- Verified current upstream `main` refs: pyMC Repeater `e17d1137ab2d2d5b86d03c99523272289b7688aa`, pyMC_core `330e32d57b9321afd63c38e634fa076a5049afee`, and pyMC Console dist `2d961cef1ae1a355eb06e34fba99788d9ffca44a` (`0.9.329`).
+- Removed 32-bit add-on builds and metadata; only `amd64` and `aarch64` remain supported.
+- Changed the backend launch path to the real persisted config file at `/config/pymc-repeater/config.yaml` and exports `PYMC_REPEATER_CONFIG` so upstream save paths do not depend on the `/etc/pymc_repeater` compatibility symlink.
+- Fixed ingress helper injection for HTML responses so app UI save requests keep the Home Assistant ingress prefix instead of escaping to Home Assistant's own `/api`.
+- Added startup preflight diagnostics for unsupported `radio_type`, missing or invalid `pymc_tcp` host/port, unreachable TCP modem endpoints, missing KISS or `pymc_usb` serial devices, non-character device paths, and serial permission failures.
+- Fail fast before the backend is marked ready when the selected radio backend is unusable instead of letting upstream `pymc_tcp` deferred-connect mode appear healthy.
+
 ## 0.3.0
 
 - Brings the app onto upstream `main` refs after the Phase 1-5 ingress/config work.

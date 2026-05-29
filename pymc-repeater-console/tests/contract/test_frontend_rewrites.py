@@ -63,6 +63,11 @@ def test_remaining_sub_filter_rules_are_intentional_inventory():
     assert actual_rules == EXPECTED_SUB_FILTER_RULES
 
 
+def test_ingress_helper_injection_applies_to_html_responses():
+    nginx = nginx_text()
+    assert nginx.count("sub_filter_types text/html application/javascript text/javascript;") == 2
+
+
 def test_remaining_minified_bundle_rewrites_are_limited_and_documented():
     nginx = nginx_text()
     remaining_patterns = [

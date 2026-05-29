@@ -39,7 +39,7 @@ Home Assistant pulls prebuilt images from GitHub Container Registry instead of b
 ghcr.io/matthew73210/pymc-repeater-console-{arch}
 ```
 
-The GitHub Actions workflow publishes `aarch64`, `amd64`, `armhf`, `armv7`, and `i386` images tagged with the app version plus `latest`. Home Assistant Supervisor uses the app `version` from `config.yaml` as the image tag.
+The GitHub Actions workflow publishes `aarch64` and `amd64` images tagged with the app version plus `latest`. Home Assistant Supervisor uses the app `version` from `config.yaml` as the image tag.
 
 ## Dashboard Access
 
@@ -117,7 +117,7 @@ The persistent config used by this app lives at:
 /config/pymc-repeater/config.yaml
 ```
 
-At startup, the app links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility. If `/config/pymc-repeater/config.yaml` already exists, the wrapper uses it unchanged. If it does not exist, the wrapper creates a default config once. Later starts do not merge, regenerate, or overwrite the file.
+At startup, the app links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility. The backend is launched with, and `PYMC_REPEATER_CONFIG` points at, the real persisted file `/config/pymc-repeater/config.yaml`. If `/config/pymc-repeater/config.yaml` already exists, the wrapper uses it unchanged. If it does not exist, the wrapper creates a default config once. Later starts do not merge, regenerate, or overwrite the file.
 
 The default pyMC config points directly at the persistent mapped paths:
 
@@ -150,6 +150,8 @@ web:
 That makes pyMC_Repeater serve Console at `/`. The Docker build preserves the original pyMC_Repeater web files under `/opt/pymc_repeater_original_web`, and Nginx serves those files at `/repeater/`.
 
 The wrapper does not translate Home Assistant options into pyMC Repeater config keys. Keep runtime configuration in `/config/pymc-repeater/config.yaml` so upstream behavior remains visible and editable as upstream config.
+
+Before starting the backend, the wrapper validates the selected `radio_type`. Unsupported radio types, missing or invalid `pymc_tcp` host/port values, unreachable TCP modem endpoints, missing KISS or `pymc_usb` serial devices, non-character serial paths, and serial permission failures stop startup with a clear log message. This prevents upstream TCP deferred-connect mode from making an unusable radio backend look healthy.
 
 ## AppArmor And Permissions
 

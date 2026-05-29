@@ -6,7 +6,7 @@ import sys
 import types
 from pathlib import Path
 
-from helpers import ADDON_ROOT, CI_SAFE_CONFIG, CONT_INIT_SCRIPT
+from helpers import ADDON_ROOT, CI_SAFE_CONFIG, CONT_INIT_SCRIPT, RUN_SCRIPT
 
 
 REMOVED_HA_OPTION_REFERENCES = {
@@ -147,6 +147,13 @@ def test_existing_persistent_config_is_preserved_unchanged(tmp_path):
     assert "unchanged" in output
 
 
+def test_backend_uses_real_persistent_config_path_for_saves():
+    run_script = RUN_SCRIPT.read_text(encoding="utf-8")
+    assert 'CONFIG_PATH="/config/pymc-repeater/config.yaml"' in run_script
+    assert 'export PYMC_REPEATER_CONFIG="${CONFIG_PATH}"' in run_script
+    assert '--config "${CONFIG_PATH}"' in run_script
+
+
 def test_missing_persistent_config_is_created_once(tmp_path):
     config_path = tmp_path / "pymc-repeater/config.yaml"
 
@@ -211,11 +218,39 @@ def test_addon_config_has_no_home_assistant_runtime_options_or_schema():
         assert f"{option_key}:" not in config_yaml
 
 
+def test_addon_config_only_declares_64_bit_architectures():
+    config_yaml = (ADDON_ROOT / "config.yaml").read_text(encoding="utf-8")
+    assert "  - aarch64\n" in config_yaml
+    assert "  - amd64\n" in config_yaml
+    for removed_arch in ("armhf", "armv7", "i386"):
+        assert removed_arch not in config_yaml
+
+
 def test_sx1262_gpio_runtime_guard_remains_in_startup_script():
     startup_text = CONT_INIT_SCRIPT.read_text(encoding="utf-8")
     assert 'radio_type == "sx1262"' in startup_text
     assert 'gpiochip == "/dev/gpiochip0"' in startup_text
     assert "Configured radio_type=sx1262 requires /dev/gpiochip0" in startup_text
+
+
+def test_radio_preflight_covers_bad_runtime_backends():
+    startup_text = CONT_INIT_SCRIPT.read_text(encoding="utf-8")
+    assert "import os" in startup_text
+    assert "os.access" in startup_text
+    expected_diagnostics = [
+        "Unsupported radio_type",
+        "pymc_tcp.host",
+        "pymc_tcp.port",
+        "could not be resolved",
+        "timed out",
+        "is not reachable",
+        "pymc_usb.port",
+        "kiss.port",
+        "not a character device",
+        "cannot read/write",
+    ]
+    for diagnostic in expected_diagnostics:
+        assert diagnostic in startup_text
 
 
 def test_ci_safe_contract_config_does_not_use_sx1262_default():

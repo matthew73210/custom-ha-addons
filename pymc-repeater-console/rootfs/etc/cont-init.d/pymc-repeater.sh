@@ -21,6 +21,7 @@ fi
 ln -sfn "${CONFIG_ROOT}" "${VAR_ROOT}"
 
 MIGRATION_RESULT="$("${PYTHON_BIN}" - <<'PY'
+import os
 import pathlib
 import shutil
 import time
@@ -306,6 +307,7 @@ bashio::log.info "Persistent pyMC Repeater data path is ${CONFIG_ROOT}."
 PREFLIGHT_RESULT="$("${PYTHON_BIN}" - <<'PY'
 import os
 import pathlib
+import socket
 import sys
 
 import yaml
@@ -314,7 +316,97 @@ config_path = pathlib.Path("/config/pymc-repeater/config.yaml")
 with config_path.open("r", encoding="utf-8") as handle:
     config = yaml.safe_load(handle) or {}
 
-radio_type = str(config.get("radio_type", "")).lower()
+radio_type = str(config.get("radio_type", "")).lower().strip()
+disabled_types = {"", "none", "null", "disabled", "off", "no_radio"}
+supported_types = {
+    "sx1262",
+    "sx1262_ch341",
+    "kiss",
+    "kiss-modem",
+    "pymc_tcp",
+    "pymc_usb",
+}
+
+if radio_type in disabled_types:
+    print(f"Radio disabled by configuration (radio_type={config.get('radio_type')!r}); startup preflight skipped.")
+    sys.exit(0)
+
+if radio_type not in supported_types:
+    print(
+        f"Unsupported radio_type={config.get('radio_type')!r} in /config/pymc-repeater/config.yaml. "
+        "Supported values: sx1262, sx1262_ch341, kiss, kiss-modem, pymc_tcp, pymc_usb, none."
+    )
+    sys.exit(1)
+
+def require_mapping(section_name):
+    section = config.get(section_name) or {}
+    if not isinstance(section, dict):
+        print(f"Configured radio_type={radio_type} requires {section_name}: to be a mapping in /config/pymc-repeater/config.yaml.")
+        sys.exit(1)
+    return section
+
+def require_int(value, label, minimum=None, maximum=None):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        print(f"Configured radio_type={radio_type} requires integer {label}; got {value!r}.")
+        sys.exit(1)
+    if minimum is not None and number < minimum:
+        print(f"Configured radio_type={radio_type} requires {label} >= {minimum}; got {number}.")
+        sys.exit(1)
+    if maximum is not None and number > maximum:
+        print(f"Configured radio_type={radio_type} requires {label} <= {maximum}; got {number}.")
+        sys.exit(1)
+    return number
+
+def require_serial_device(path_value, label):
+    path = str(path_value or "").strip()
+    if not path:
+        print(f"Configured radio_type={radio_type} requires {label} in /config/pymc-repeater/config.yaml.")
+        sys.exit(1)
+    device = pathlib.Path(path)
+    if not device.exists():
+        print(
+            f"Configured radio_type={radio_type} uses {label}={path}, but that serial device is not present "
+            "inside the add-on container. Check the device path, prefer /dev/serial/by-id/..., and confirm "
+            "Home Assistant exposes the USB/UART device to this add-on."
+        )
+        sys.exit(1)
+    if not device.is_char_device():
+        print(f"Configured radio_type={radio_type} uses {label}={path}, but it is not a character device.")
+        sys.exit(1)
+    if not os.access(path, os.R_OK | os.W_OK):
+        print(
+            f"Configured radio_type={radio_type} uses {label}={path}, but the add-on cannot read/write it. "
+            "Check serial device permissions and the add-on USB/UART mapping."
+        )
+        sys.exit(1)
+    return path
+
+def require_tcp_endpoint(section):
+    host = str(section.get("host", "")).strip()
+    if not host:
+        print("Configured radio_type=pymc_tcp requires pymc_tcp.host in /config/pymc-repeater/config.yaml.")
+        sys.exit(1)
+    port = require_int(section.get("port", 5055), "pymc_tcp.port", 1, 65535)
+    timeout = float(section.get("connect_timeout", 5.0) or 5.0)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            pass
+    except socket.gaierror as exc:
+        print(f"Configured radio_type=pymc_tcp host {host!r} could not be resolved: {exc}.")
+        sys.exit(1)
+    except TimeoutError as exc:
+        print(f"Configured radio_type=pymc_tcp endpoint {host}:{port} timed out after {timeout}s: {exc}.")
+        sys.exit(1)
+    except OSError as exc:
+        print(
+            f"Configured radio_type=pymc_tcp endpoint {host}:{port} is not reachable: {exc}. "
+            "Check the modem IP/hostname, port, firewall, and that pymc_usb TCP mode is running."
+        )
+        sys.exit(1)
+    return host, port
+
 sx1262_config = config.get("sx1262") or {}
 if not isinstance(sx1262_config, dict):
     sx1262_config = {}
@@ -336,13 +428,18 @@ if radio_type == "sx1262" and gpiochip == "/dev/gpiochip0" and not os.path.exist
     sys.exit(1)
 
 if radio_type == "pymc_tcp":
-    pymc_tcp_config = config.get("pymc_tcp") or {}
-    if not isinstance(pymc_tcp_config, dict):
-        print("Configured radio_type=pymc_tcp requires a pymc_tcp mapping in /config/pymc-repeater/config.yaml.")
-        sys.exit(1)
-    if not str(pymc_tcp_config.get("host", "")).strip():
-        print("Configured radio_type=pymc_tcp requires pymc_tcp.host in /config/pymc-repeater/config.yaml.")
-        sys.exit(1)
+    host, port = require_tcp_endpoint(require_mapping("pymc_tcp"))
+    print(f"pymc_tcp endpoint reachable: {host}:{port}")
+
+if radio_type == "pymc_usb":
+    pymc_usb_config = require_mapping("pymc_usb")
+    require_serial_device(pymc_usb_config.get("port"), "pymc_usb.port")
+    require_int(pymc_usb_config.get("baudrate", 921600), "pymc_usb.baudrate", 1)
+
+if radio_type in {"kiss", "kiss-modem"}:
+    kiss_config = require_mapping("kiss")
+    require_serial_device(kiss_config.get("port"), "kiss.port")
+    require_int(kiss_config.get("baud_rate", 115200), "kiss.baud_rate", 1)
 
 print("ok")
 PY
@@ -351,4 +448,9 @@ PY
   exit 1
 }
 
+while IFS= read -r line; do
+  if [ "${line}" != "ok" ]; then
+    bashio::log.info "preflight | ${line}"
+  fi
+done <<< "${PREFLIGHT_RESULT}"
 bashio::log.info "pyMC Repeater config preflight passed."

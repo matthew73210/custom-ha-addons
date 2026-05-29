@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
-CONFIG_PATH="/etc/pymc_repeater/config.yaml"
+CONFIG_PATH="/config/pymc-repeater/config.yaml"
 UPSTREAM_METADATA_PATH="/usr/share/pymc-repeater-console/upstream-build-info.json"
 PYTHON_BIN="/opt/venv/bin/python3"
 BACKEND_HOST="127.0.0.1"
@@ -11,12 +11,15 @@ DIRECT_PORT="8000"
 INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
+export PYMC_REPEATER_CONFIG="${CONFIG_PATH}"
+
 LOG_LEVEL="$("${PYTHON_BIN}" - <<'PY'
+import os
 import pathlib
 
 import yaml
 
-config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+config_path = pathlib.Path(os.environ.get("PYMC_REPEATER_CONFIG", "/config/pymc-repeater/config.yaml"))
 try:
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
@@ -40,6 +43,7 @@ log_redacted_config() {
   bashio::log.info "Persisted ${CONFIG_PATH} (secrets redacted):"
   "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
 import pathlib
+import os
 
 import yaml
 
@@ -70,7 +74,7 @@ def redact(value):
     return value
 
 
-config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+config_path = pathlib.Path(os.environ.get("PYMC_REPEATER_CONFIG", "/config/pymc-repeater/config.yaml"))
 with config_path.open("r", encoding="utf-8") as handle:
     config = yaml.safe_load(handle) or {}
 
@@ -81,11 +85,12 @@ PY
 log_storage_diagnostics() {
   "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "storage | ${line}"; done
 import pathlib
+import os
 import sqlite3
 
 import yaml
 
-config_path = pathlib.Path("/etc/pymc_repeater/config.yaml")
+config_path = pathlib.Path(os.environ.get("PYMC_REPEATER_CONFIG", "/config/pymc-repeater/config.yaml"))
 
 try:
     with config_path.open("r", encoding="utf-8") as handle:

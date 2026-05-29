@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "verification_date": "2026-05-23",
+  "verification_date": "2026-05-29",
   "purpose": "Track upstream refs used by default for pymc-repeater-console builds and the latest resolved upstream main SHAs observed during review.",
   "status_note": "Default builds intentionally track upstream main branches. Build metadata records the resolved SHAs for each image.",
   "release_policy": {
@@ -11,7 +11,7 @@
   "current_default_refs": [
     {
       "addon_slug": "pymc-repeater-console",
-      "verification_date": "2026-05-23",
+      "verification_date": "2026-05-29",
       "contract_test_status": "source-level tests pass; live container build/test should record resolved SHAs",
       "pymc_repeater": {
         "repository": "pyMC-dev/pyMC_Repeater",

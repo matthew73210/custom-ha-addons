@@ -84,10 +84,12 @@ If Home Assistant Supervisor requires narrower or additional device mapping for 
 
 ## Startup Behavior
 
-The wrapper creates `/config/pymc-repeater/config.yaml` once if it is missing and then preserves it unchanged on later starts. Startup passes the runtime config file to upstream pyMC Repeater unchanged through:
+The wrapper creates `/config/pymc-repeater/config.yaml` once if it is missing and then preserves it unchanged on later starts. Startup passes the real persisted runtime config file to upstream pyMC Repeater unchanged through:
 
 ```text
-python -m repeater.main --config /etc/pymc_repeater/config.yaml
+python -m repeater.main --config /config/pymc-repeater/config.yaml
 ```
 
-`/etc/pymc_repeater` is a wrapper symlink to the persisted `/config/pymc-repeater` directory.
+`PYMC_REPEATER_CONFIG` also points at `/config/pymc-repeater/config.yaml`. `/etc/pymc_repeater` is still a wrapper symlink to the persisted `/config/pymc-repeater` directory for upstream compatibility.
+
+When `radio_type` is `pymc_usb`, startup requires the configured `pymc_usb.port` to exist, be a character device, and be readable/writable inside the add-on container. When `radio_type` is `pymc_tcp`, startup requires the configured host and port to resolve and accept a TCP connection.

@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.3.0
+ARG BUILD_VERSION=0.3.1
 ARG BUILD_ARCH=amd64
 ARG BUILD_DATE=
 ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
@@ -15,7 +15,7 @@ ARG PYMC_CONSOLE_REPO=https://github.com/dmduran12/pymc_console-dist.git
 ENV INSTALL_DIR=/opt/pymc_repeater \
     CONSOLE_WEB_DIR=/opt/pymc_console/web/html \
     ORIGINAL_WEB_DIR=/opt/pymc_repeater_original_web \
-    PYMC_REPEATER_CONFIG=/etc/pymc_repeater/config.yaml \
+    PYMC_REPEATER_CONFIG=/config/pymc-repeater/config.yaml \
     PYTHONUNBUFFERED=1 \
     SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYMC_REPEATER=1.0.5 \
     VIRTUAL_ENV=/opt/venv \

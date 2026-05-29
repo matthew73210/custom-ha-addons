@@ -28,7 +28,7 @@ Current default refs:
 - pyMC_core: `main`
 - pyMC Console dist: `main`
 
-These moving refs are the Dockerfile defaults for review and release/default builds. The Docker build records the resolved commit SHA for each image, so published images remain inspectable even though the requested ref is `main`. On 2026-05-23, pyMC Repeater `main` included the config-file radio selection branches for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
+These moving refs are the Dockerfile defaults for review and release/default builds. The Docker build records the resolved commit SHA for each image, so published images remain inspectable even though the requested ref is `main`. On 2026-05-29, pyMC Repeater `main` included the config-file radio selection branches for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
 
 ## Release Policy
 
@@ -99,7 +99,7 @@ Normal push and manual release/default workflow paths:
 - Validate wrapper source and metadata before building.
 - Run source-level contract tests.
 - Build an amd64 default-ref image and run live contract tests against it.
-- Publish multi-arch images from the configured default upstream refs.
+- Publish `amd64` and `aarch64` images from the configured default upstream refs.
 
 Pull requests run validation and contract tests against the default-ref image, but do not publish images.
 
@@ -167,7 +167,7 @@ pymc-repeater-console/tests/contract
 
 The suite can run against supplied direct/ingress URLs or start a Docker image when `PYMC_REPEATER_CONSOLE_IMAGE` is provided. Current-state route, config, and API-purity tests are normal tests after Phase 3 removed normal compat API routing.
 
-CI runs both source-level tests and live-container tests. Live-container tests run against amd64 images because they are smoke/contract tests for wrapper behavior; release publishing still builds every supported Home Assistant architecture from the default refs.
+CI runs both source-level tests and live-container tests. Live-container tests run against amd64 images because they are smoke/contract tests for wrapper behavior; release publishing builds the supported 64-bit Home Assistant architectures, `amd64` and `aarch64`, from the default refs.
 
 ## pyMC USB Tracking
 
