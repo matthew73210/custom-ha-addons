@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2
+
+- Audited bundled pyMC Console `0.9.329` API, auth, WebSocket, static, and Carto map paths against the transparent ingress proxy.
+- Expanded failure-only Nginx diagnostics to cover all forwarded `/auth/*`, `/api/*`, and `/ws/*` paths so frontend/upstream route drift is visible without logging successful API traffic.
+- Added startup LBT diagnostics for the selected upstream radio path, configured `pymc_usb` or `pymc_tcp` LBT settings, and the count of stored packets with `lbt_attempts > 0`.
+- Documented that Console LBT charts intentionally remain empty until upstream records a busy-channel CAD backoff with `lbt_attempts > 0`.
+- Added contract coverage for the audited Console route inventory and both Console WebSocket paths.
+- Kept all application source unchanged; the update is wrapper diagnostics, tests, documentation, and metadata only.
+
 ## 0.3.1
 
 - Verified current upstream `main` refs: pyMC Repeater `e17d1137ab2d2d5b86d03c99523272289b7688aa`, pyMC_core `330e32d57b9321afd63c38e634fa076a5049afee`, and pyMC Console dist `2d961cef1ae1a355eb06e34fba99788d9ffca44a` (`0.9.329`).

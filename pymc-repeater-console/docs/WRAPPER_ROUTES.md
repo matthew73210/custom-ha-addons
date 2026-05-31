@@ -29,6 +29,99 @@ Classification:
 | `/ws/companion_frame` | WebSocket | Default proxy to upstream pyMC Repeater | OK | Valid WebSocket forwarding when upgrade headers and messages pass through unchanged. | Add contract test proving upgrade succeeds and message content is not wrapper-mutated. |
 | Other `/api/*` routes | Any | Default proxy to upstream pyMC Repeater unless explicitly intercepted above | OK | Transparent upstream API proxying is valid wrapper behavior. | Add tests that proxied APIs are upstream-controlled and not response-mutated. |
 
+## Bundled Console Route Audit
+
+Audited against pyMC Console dist `main` commit
+`2d961cef1ae1a355eb06e34fba99788d9ffca44a` (`0.9.329`).
+
+Console REST paths found in the bundled frontend:
+
+```text
+/api/acl_clients
+/api/acl_info
+/api/acl_remove_client
+/api/acl_stats
+/api/advert_rate_limit_stats
+/api/adverts_by_contact_type
+/api/analytics/bucketed_stats
+/api/analytics/disambiguation
+/api/analytics/last_hop_neighbors
+/api/analytics/mobile_nodes
+/api/analytics/neighbor_affinity
+/api/analytics/path_health
+/api/analytics/sparklines
+/api/analytics/topology
+/api/analytics/tx_recommendations
+/api/auth/tokens
+/api/auth/tokens/
+/api/bulk_packets
+/api/check_pymc_console
+/api/companion/
+/api/crc_error_count
+/api/crc_error_history
+/api/crc_error_logs
+/api/create_identity
+/api/delete_identity
+/api/filtered_packets
+/api/hardware_processes
+/api/hardware_stats
+/api/identities
+/api/log_level
+/api/logs
+/api/metrics_graph_data
+/api/neighbor_remove
+/api/noise_floor_history
+/api/packet_by_hash
+/api/packet_stats
+/api/packet_type_graph_data
+/api/packet_type_stats
+/api/ping_neighbor
+/api/radio_presets
+/api/recent_packets
+/api/restart_service
+/api/room_clients
+/api/room_message
+/api/room_messages
+/api/room_messages_clear
+/api/room_post_message
+/api/room_stats
+/api/send_advert
+/api/send_room_server_advert
+/api/set_duty_cycle
+/api/set_mode
+/api/stats
+/api/transport_key/
+/api/transport_keys
+/api/unscoped_flood_policy
+/api/update/changelog
+/api/update/channels
+/api/update/check
+/api/update/install
+/api/update/progress
+/api/update/set_channel
+/api/update/status
+/api/update_advert_rate_limit_config
+/api/update_duty_cycle_config
+/api/update_identity
+/api/update_radio_config
+/api/update_web_config
+```
+
+Other Console browser paths found:
+
+```text
+/auth/login
+/auth/refresh
+/ws/companion_frame
+/ws/packets
+/assets/*
+/favicon.ico
+```
+
+All of these paths use the transparent default upstream proxy. Static helper routes,
+the preserved `/repeater/` UI, duplicate `/api/api/*` normalization, and Carto
+same-origin paths remain explicit wrapper exceptions.
+
 ## Quarantined Compatibility API
 
 `console_compat_api.py` remains in the repository as quarantined legacy code for now, but it is not in the s6 user bundle, has no ingress service dependency, and receives no normal Nginx traffic.
@@ -82,3 +175,15 @@ Required behavior:
 - Do not fake empty/default responses.
 - Let Console fail clearly if it expects unavailable upstream APIs.
 - Document unsupported Console pages or upstream version requirements.
+
+## LBT Graph Requirement
+
+Console filters Signal Lab LBT chart rows to packets where `lbt_attempts > 0`.
+Upstream pyMC Repeater persists `lbt_attempts`, `lbt_backoff_delays_ms`, and
+`lbt_channel_busy`, but the graph remains empty when the stored rows are
+`0`, `null` or empty, and `false`.
+
+For upstream `pymc_usb` and `pymc_tcp`, pyMC_core emits a positive attempt count
+only when CAD finds the channel busy and performs a backoff. SX1262 also has an
+upstream CAD-before-transmit path. Other radio paths may not emit LBT metadata.
+The wrapper must not fabricate positive values to make the chart render.

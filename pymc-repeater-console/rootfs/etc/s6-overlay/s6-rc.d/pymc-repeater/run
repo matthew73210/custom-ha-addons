@@ -155,6 +155,68 @@ if db_path.exists():
 PY
 }
 
+log_lbt_diagnostics() {
+  "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "lbt | ${line}"; done
+import pathlib
+import os
+import sqlite3
+
+import yaml
+
+config_path = pathlib.Path(os.environ.get("PYMC_REPEATER_CONFIG", "/config/pymc-repeater/config.yaml"))
+
+try:
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+except Exception as exc:
+    print(f"unable to read config: {exc}")
+    raise SystemExit(0)
+
+
+def as_bool(value, default):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+radio_type = str(config.get("radio_type", "")).strip().lower()
+if radio_type in {"pymc_usb", "pymc_tcp"}:
+    section = config.get(radio_type) or {}
+    enabled = as_bool(section.get("lbt_enabled"), True)
+    max_attempts = section.get("lbt_max_attempts", 5)
+    print(
+        f"radio_type={radio_type}; lbt_capable=yes; "
+        f"lbt_enabled={str(enabled).lower()}; lbt_max_attempts={max_attempts}"
+    )
+elif radio_type in {"sx1262", "sx1262_ch341"}:
+    print(f"radio_type={radio_type}; lbt_capable=yes; upstream SX1262 CAD path selected")
+else:
+    print(f"radio_type={radio_type or 'unset'}; lbt_capable=no")
+
+db_path = pathlib.Path((config.get("storage") or {}).get("storage_dir", "/config/pymc-repeater")) / "repeater.db"
+if db_path.exists():
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            columns = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(packets)")
+            }
+            if "lbt_attempts" in columns:
+                total, positive = conn.execute(
+                    "SELECT COUNT(*), "
+                    "SUM(CASE WHEN COALESCE(lbt_attempts, 0) > 0 THEN 1 ELSE 0 END) "
+                    "FROM packets"
+                ).fetchone()
+                print(f"stored_packets={total}; packets_with_lbt_attempts_gt_zero={positive or 0}")
+    except Exception as exc:
+        print(f"stored LBT summary unavailable: {exc}")
+
+print("Console LBT graphs require stored packets with lbt_attempts > 0.")
+PY
+}
+
 log_listeners() {
   bashio::log.info "Listening TCP sockets:"
   if command -v ss >/dev/null 2>&1; then
@@ -200,18 +262,30 @@ compare_endpoint_probe() {
 }
 
 log_endpoint_diagnostics() {
-  bashio::log.info "Comparing direct wrapper and ingress API routes used by Console graphs/history."
+  bashio::log.info "Comparing direct wrapper and ingress routes used by Console."
+  compare_endpoint_probe "/auth/refresh"
   compare_endpoint_probe "/api/stats?probe=query"
   compare_endpoint_probe "/api/recent_packets?limit=5"
+  compare_endpoint_probe "/api/bulk_packets?limit=5"
   compare_endpoint_probe "/api/filtered_packets?limit=5"
+  compare_endpoint_probe "/api/packet_by_hash?packet_hash=contract-missing"
   compare_endpoint_probe "/api/packet_stats?hours=24"
+  compare_endpoint_probe "/api/packet_type_stats?hours=24"
   compare_endpoint_probe "/api/packet_type_graph_data?hours=24&resolution=average&types=all"
   compare_endpoint_probe "/api/metrics_graph_data?hours=24&resolution=average&metrics=rx_count,tx_count"
   compare_endpoint_probe "/api/rrd_data?start_time=0&end_time=0&resolution=average"
   compare_endpoint_probe "/api/noise_floor_history?hours=24"
+  compare_endpoint_probe "/api/crc_error_count?hours=24"
   compare_endpoint_probe "/api/crc_error_history?hours=24"
+  compare_endpoint_probe "/api/crc_error_logs?hours=24"
   compare_endpoint_probe "/api/adverts_by_contact_type?limit=5&hours=24"
   compare_endpoint_probe "/api/db_stats"
+  compare_endpoint_probe "/api/hardware_stats"
+  compare_endpoint_probe "/api/hardware_processes"
+  compare_endpoint_probe "/api/advert_rate_limit_stats"
+  compare_endpoint_probe "/api/transport_keys"
+  compare_endpoint_probe "/api/unscoped_flood_policy"
+  compare_endpoint_probe "/api/companion/stats?type=packets"
   compare_endpoint_probe "/api/analytics/topology"
   compare_endpoint_probe "/api/analytics/bucketed_stats?preset=1h"
 }
@@ -371,6 +445,7 @@ if [ "${DEBUG_LOG}" = "true" ]; then
   log_redacted_config
 fi
 log_storage_diagnostics
+log_lbt_diagnostics
 runtime_support_sanity | while IFS= read -r line; do bashio::log.info "runtime | ${line}"; done
 
 bashio::log.info "Starting pyMC Repeater backend on port ${BACKEND_PORT}."

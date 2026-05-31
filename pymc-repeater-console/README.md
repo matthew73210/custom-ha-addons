@@ -85,6 +85,28 @@ Console packet-cache and graph routes are proxied to the upstream backend unchan
 
 Both upstream frontends expect to run at `/`. The app handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
 
+### Proxied Routes
+
+The bundled Console frontend route audit covers:
+
+- Upstream REST and auth namespaces: `/api/*`, `/auth/login`, and `/auth/refresh`
+- Upstream WebSockets: `/ws/packets` and `/ws/companion_frame`
+- Console assets: `/assets/*` and `/favicon.ico`
+- Preserved original Repeater UI: `/repeater/` and its assets
+- Wrapper-owned Carto ingress adaptation: `/_pymc_map_proxy/basemaps/*` and `/_pymc_map_proxy/tiles/*`
+
+The default Nginx location forwards Console REST, auth, WebSocket, static, and SPA requests to pyMC Repeater unchanged. Wrapper exceptions are limited to ingress URL adaptation, `/api/api/*` path normalization for the original Repeater UI, the preserved `/repeater/` UI mount, and the Carto same-origin proxy.
+
+Current Console dist includes `/api/analytics/*` calls that current pyMC Repeater `main` does not provide. Those calls are still forwarded upstream. A native upstream `404` is expected until upstream Console and Repeater converge; the wrapper does not recreate analytics locally.
+
+### LBT Graph Diagnostics
+
+Console Signal Lab LBT charts only include stored packet rows where `lbt_attempts > 0`. Existing packets with `lbt_attempts: 0`, `lbt_backoff_delays_ms: null` or an empty list, and `lbt_channel_busy: false` are valid but do not render as chart points.
+
+For upstream `radio_type: pymc_usb` and `radio_type: pymc_tcp`, enable `lbt_enabled` and configure `lbt_max_attempts` in the matching persisted config section. Upstream records a positive attempt count only when CAD reports a busy channel and a backoff occurs. The upstream SX1262 path also performs CAD before transmit. Radio types without upstream LBT metadata will keep the chart empty.
+
+At startup the wrapper logs the selected `radio_type`, whether that upstream path is LBT-capable, configured LBT flags for `pymc_usb` or `pymc_tcp`, and a count of stored packets with `lbt_attempts > 0`. It does not invent telemetry. Set persisted `logging.level: DEBUG` to also compare direct-wrapper and ingress responses for representative Console routes.
+
 ### Browser Note
 
 Chrome and Chromium-based browsers are recommended for Console graph pages through Home Assistant ingress. iPhone/iOS testing currently works. Safari may still have incomplete graph rendering through HA ingress due to browser handling of worker URL rewriting under the ingress path; direct non-ingress access may work even when Safari ingress graph rendering does not.
@@ -138,7 +160,7 @@ If Home Assistant Supervisor logs warnings about old options such as `node_name`
 
 Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `logging.level` in `/config/pymc-repeater/config.yaml` is set to `DEBUG` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
 
-Nginx logs worker asset requests plus failed graph/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
+Nginx logs worker asset requests plus failed auth/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values. A failed ingress request with an upstream address reached pyMC Repeater; a `502` or missing upstream address points to wrapper/backend reachability instead.
 
 The wrapper sets:
 

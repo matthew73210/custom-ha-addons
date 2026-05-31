@@ -38,9 +38,10 @@ def test_repeater_redirect_preserves_ingress_prefix_when_observable(app):
     assert "/api/hassio_ingress/contract-token" in location
 
 
-def test_websocket_upgrade_path_is_forwarded_or_fails_without_gateway_error(app):
+@pytest.mark.parametrize("path", ["/ws/packets", "/ws/companion_frame"])
+def test_websocket_upgrade_path_is_forwarded_or_fails_without_gateway_error(app, path):
     try:
-        status = websocket_handshake(app.ingress_base_url, "/ws/packets", headers=INGRESS_HEADER)
+        status = websocket_handshake(app.ingress_base_url, path, headers=INGRESS_HEADER)
     except RuntimeError as exc:
         pytest.skip(str(exc))
 

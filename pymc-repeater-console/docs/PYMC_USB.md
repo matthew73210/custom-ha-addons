@@ -82,6 +82,17 @@ Those are wrapper-level device access declarations. They are not pyMC runtime op
 
 If Home Assistant Supervisor requires narrower or additional device mapping for a specific install, that mapping should remain wrapper packaging metadata. The pyMC radio type, USB serial path, remote TCP/IP host, remote TCP port, baudrate, and LBT behavior must stay in `/config/pymc-repeater/config.yaml`.
 
+## LBT Graphs
+
+For `pymc_usb` and `pymc_tcp`, upstream pyMC_core performs CAD before transmit when
+`lbt_enabled` is true. It records a positive `lbt_attempts` count only when CAD
+reports a busy channel and a backoff occurs. Console Signal Lab filters LBT chart
+points to stored packets with `lbt_attempts > 0`, so an empty graph does not by
+itself mean ingress forwarding failed.
+
+The wrapper logs the selected radio type, LBT config flags, and stored positive
+LBT packet count at startup. It does not generate substitute LBT values.
+
 ## Startup Behavior
 
 The wrapper creates `/config/pymc-repeater/config.yaml` once if it is missing and then preserves it unchanged on later starts. Startup passes the real persisted runtime config file to upstream pyMC Repeater unchanged through:

@@ -308,7 +308,9 @@ PREFLIGHT_RESULT="$("${PYTHON_BIN}" - <<'PY'
 import os
 import pathlib
 import socket
+import struct
 import sys
+import time
 
 import yaml
 
@@ -383,6 +385,126 @@ def require_serial_device(path_value, label):
         sys.exit(1)
     return path
 
+def crc16_ccitt(data):
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc <<= 1
+            crc &= 0xFFFF
+    return crc
+
+def build_pymc_frame(cmd, payload=b""):
+    header = struct.pack("<BH", cmd, len(payload))
+    return b"\xAA" + header + payload + struct.pack("<H", crc16_ccitt(header + payload))
+
+def read_pymc_frame(ser, timeout, expect_cmd=None):
+    deadline = time.time() + timeout
+    bytes_read = 0
+    non_sync = 0
+    while time.time() < deadline:
+        b = ser.read(1)
+        if not b:
+            continue
+        bytes_read += 1
+        if b[0] != 0xAA:
+            non_sync += 1
+            continue
+        header = ser.read(3)
+        bytes_read += len(header)
+        if len(header) != 3:
+            continue
+        cmd = header[0]
+        length = struct.unpack("<H", header[1:3])[0]
+        if length > 287:
+            continue
+        payload = ser.read(length) if length else b""
+        crc_bytes = ser.read(2)
+        bytes_read += len(payload) + len(crc_bytes)
+        if len(payload) != length or len(crc_bytes) != 2:
+            continue
+        recv_crc = struct.unpack("<H", crc_bytes)[0]
+        calc_crc = crc16_ccitt(header + payload)
+        if recv_crc != calc_crc:
+            continue
+        if expect_cmd is not None and cmd != expect_cmd and cmd != 0xFE:
+            continue
+        return cmd, payload, bytes_read, non_sync
+    return None, b"", bytes_read, non_sync
+
+def probe_pymc_usb_protocol(path, baudrate):
+    print(f"pymc_usb selected: port={path} baudrate={baudrate}")
+    try:
+        import serial
+    except Exception as exc:
+        print(f"Configured radio_type=pymc_usb cannot run protocol preflight because pyserial is unavailable: {exc}.")
+        sys.exit(1)
+
+    try:
+        ser = serial.Serial()
+        ser.port = path
+        ser.baudrate = baudrate
+        ser.timeout = 0.2
+        ser.write_timeout = 2.0
+        ser.dsrdtr = False
+        ser.rtscts = False
+        ser.dtr = False
+        ser.rts = False
+        print("pymc_usb opening serial for protocol preflight (DTR=False RTS=False)")
+        ser.open()
+    except Exception as exc:
+        print(f"Configured radio_type=pymc_usb could not open {path} at {baudrate} baud: {exc}.")
+        sys.exit(1)
+
+    try:
+        time.sleep(0.5)
+        passive = ser.in_waiting
+        if passive:
+            data = ser.read(passive)
+            data_hex = data.hex(" ")
+            print(f"pymc_usb passive/startup bytes before probe: {data_hex}")
+        ser.reset_input_buffer()
+
+        # Harmless protocol probe. The real backend first startup command
+        # remains SET_CONFIG; this only validates that the device speaks the
+        # pymc-usb frame protocol before the add-on reports healthy.
+        for tx_cmd, rx_cmd, name in ((0x70, 0x71, "GET_VERSION"), (0xFF, 0xFF, "PING")):
+            frame = build_pymc_frame(tx_cmd)
+            frame_hex = frame.hex(" ")
+            print(f"pymc_usb preflight TX {name}: {frame_hex} ({len(frame)} bytes)")
+            written = ser.write(frame)
+            print(f"pymc_usb preflight wrote {written} bytes")
+            cmd, payload, bytes_read, non_sync = read_pymc_frame(ser, 2.0, rx_cmd)
+            if cmd == rx_cmd:
+                decoded = payload.decode("utf-8", "replace") if rx_cmd == 0x71 else ""
+                print(
+                    f"pymc_usb preflight decoded valid response: cmd=0x{cmd:02X} "
+                    f"payload_len={len(payload)} bytes_read={bytes_read} {decoded}"
+                )
+                return
+            if cmd == 0xFE:
+                err = payload[0] if payload else 0xFF
+                print(f"pymc_usb preflight received CMD_ERROR 0x{err:02X} after {name}")
+                return
+            print(
+                f"pymc_usb preflight no valid response to {name}: "
+                f"bytes_read={bytes_read} non_sync_bytes={non_sync}"
+            )
+
+        print(
+            "Configured radio_type=pymc_usb opened the serial device, but no valid pymc-usb "
+            "GET_VERSION or PING response was decoded. The device may be silent, reset-looping, "
+            "running incompatible firmware, using the wrong baudrate/line settings, or not exposed "
+            "correctly to the add-on container."
+        )
+        sys.exit(1)
+    finally:
+        ser.close()
+        print("pymc_usb preflight serial closed")
+
 def require_tcp_endpoint(section):
     host = str(section.get("host", "")).strip()
     if not host:
@@ -433,8 +555,9 @@ if radio_type == "pymc_tcp":
 
 if radio_type == "pymc_usb":
     pymc_usb_config = require_mapping("pymc_usb")
-    require_serial_device(pymc_usb_config.get("port"), "pymc_usb.port")
-    require_int(pymc_usb_config.get("baudrate", 921600), "pymc_usb.baudrate", 1)
+    pymc_usb_port = require_serial_device(pymc_usb_config.get("port"), "pymc_usb.port")
+    pymc_usb_baudrate = require_int(pymc_usb_config.get("baudrate", 921600), "pymc_usb.baudrate", 1)
+    probe_pymc_usb_protocol(pymc_usb_port, pymc_usb_baudrate)
 
 if radio_type in {"kiss", "kiss-modem"}:
     kiss_config = require_mapping("kiss")
