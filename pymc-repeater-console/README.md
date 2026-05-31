@@ -9,13 +9,15 @@ pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST 
 
 Current upstream build refs:
 
-- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `main`
-- pyMC_core repo/ref: `https://github.com/pyMC-dev/pyMC_core.git` / `main`
-- pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `main`
+- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `e17d1137ab2d2d5b86d03c99523272289b7688aa`
+- pyMC_core repo/ref: `https://github.com/pyMC-dev/pyMC_core.git` / `330e32d57b9321afd63c38e634fa076a5049afee`
+- pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 
 The Docker build logs the requested ref and resolved commit SHA for each upstream ref, writes `/usr/share/pymc-repeater-console/upstream-build-info.json`, and fails clearly if a requested ref cannot be resolved. The refs remain configurable with `PYMC_REPEATER_REF`, `PYMC_CORE_REF`, and `PYMC_CONSOLE_REF` build arguments for dev/testing.
 
-Compatibility note: default builds now track upstream `main` for pyMC Repeater, pyMC_core, and pyMC Console dist. The pymc-usb-compatible modem family can be reached locally over USB serial with upstream `radio_type: pymc_usb`, or remotely over TCP/IP with upstream `radio_type: pymc_tcp`. The wrapper creates a default upstream config only when no persisted config exists and does not add a protocol bridge or compatibility shim.
+Compatibility note: release/default builds use reviewed commit SHAs. The read-only **Check pyMC Upstream Mergeability** workflow watches upstream `main`, temporarily builds and tests drifted SHAs, and reports whether they appear safe to pin manually after review. It never publishes images or updates refs. See `docs/UPSTREAM_TRACKING.md`.
+
+The pymc-usb-compatible modem family can be reached locally over USB serial with upstream `radio_type: pymc_usb`, or remotely over TCP/IP with upstream `radio_type: pymc_tcp`. The wrapper creates a default upstream config only when no persisted config exists and does not add a protocol bridge or compatibility shim.
 
 ## Installation
 

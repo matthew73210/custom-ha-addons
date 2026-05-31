@@ -8,7 +8,7 @@
 
 ## Upstream Support
 
-The default pyMC Repeater upstream `main` ref supports the pymc-usb-compatible modem family in two ways:
+The reviewed pyMC Repeater release pin supports the pymc-usb-compatible modem family in two ways:
 
 - Local USB serial mode uses `radio_type: pymc_usb` and the `pymc_usb` config section.
 - TCP/IP mode to a remote pymc-usb-compatible firmware endpoint uses `radio_type: pymc_tcp` and the `pymc_tcp` config section.

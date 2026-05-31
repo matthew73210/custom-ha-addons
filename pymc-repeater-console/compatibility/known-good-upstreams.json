@@ -1,12 +1,13 @@
 {
   "schema_version": 2,
   "verification_date": "2026-05-29",
-  "purpose": "Track upstream refs used by default for pymc-repeater-console builds and the latest resolved upstream main SHAs observed during review.",
-  "status_note": "Default builds intentionally track upstream main branches. Build metadata records the resolved SHAs for each image.",
+  "purpose": "Track reviewed upstream refs used by default for pymc-repeater-console release builds.",
+  "status_note": "Default release builds use reviewed commit SHAs. The read-only upstream merge-readiness workflow compares those pins with watched upstream branches.",
   "release_policy": {
-    "default_builds": "use upstream main refs for pyMC Repeater, pyMC_core, and pyMC Console dist",
+    "default_builds": "use reviewed commit SHAs for pyMC Repeater, pyMC_core, and pyMC Console dist",
     "override_builds": "may set PYMC_REPEATER_REF, PYMC_CORE_REF, or PYMC_CONSOLE_REF to a branch, tag, or commit SHA for review or recovery",
-    "upstream_drift": "must be detected and reported, not hidden by compatibility shims"
+    "upstream_drift": "must be detected and reported by the read-only upstream merge-readiness workflow, not hidden by compatibility shims",
+    "pin_updates": "manual review only; workflows must not update pins automatically"
   },
   "current_default_refs": [
     {
@@ -15,23 +16,23 @@
       "contract_test_status": "source-level tests pass; live container build/test should record resolved SHAs",
       "pymc_repeater": {
         "repository": "pyMC-dev/pyMC_Repeater",
-        "requested_ref": "main",
+        "requested_ref": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
         "resolved_sha_observed": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
-        "status": "upstream-main-default",
+        "status": "reviewed-release-pin",
         "verification_note": "Upstream main includes config-file radio selection for radio_type=pymc_tcp and radio_type=pymc_usb."
       },
       "pymc_core": {
         "repository": "pyMC-dev/pyMC_core",
-        "requested_ref": "main",
+        "requested_ref": "330e32d57b9321afd63c38e634fa076a5049afee",
         "resolved_sha_observed": "330e32d57b9321afd63c38e634fa076a5049afee",
-        "status": "upstream-main-default"
+        "status": "reviewed-release-pin"
       },
       "pymc_console_dist": {
         "repository": "dmduran12/pymc_console-dist",
-        "requested_ref": "main",
+        "requested_ref": "2d961cef1ae1a355eb06e34fba99788d9ffca44a",
         "resolved_sha_observed": "2d961cef1ae1a355eb06e34fba99788d9ffca44a",
         "version_observed": "0.9.329",
-        "status": "upstream-main-default"
+        "status": "reviewed-release-pin"
       },
       "wrapper_contract_notes": [
         "No upstream source should be patched on disk.",

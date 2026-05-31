@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "purpose": "Track reviewed release pins and watched upstream refs for the read-only pymc-repeater-console merge-readiness workflow.",
+  "policy": {
+    "release_pin_updates": "manual review only",
+    "workflow_behavior": "resolve drift, temporarily build/test watched SHAs, and report a verdict without changing pins or publishing images",
+    "authoritative_release_pins": "Keep Dockerfile ARG defaults and .github/workflows/build-pymc-repeater-console.yml PYMC_*_DEFAULT_REF values aligned. This manifest mirrors the reviewed baseline for drift reporting."
+  },
+  "upstreams": [
+    {
+      "id": "pymc_repeater",
+      "name": "pyMC Repeater",
+      "repo_url": "https://github.com/pyMC-dev/pyMC_Repeater.git",
+      "github_slug": "pyMC-dev/pyMC_Repeater",
+      "repo_build_arg": "PYMC_REPEATER_REPO",
+      "ref_build_arg": "PYMC_REPEATER_REF",
+      "release_workflow_env": "PYMC_REPEATER_DEFAULT_REF",
+      "pinned_ref": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
+      "watched_ref": "main",
+      "release_critical": true,
+      "notes": "Backend daemon fetched and installed unchanged during the wrapper build."
+    },
+    {
+      "id": "pymc_core",
+      "name": "pyMC Core",
+      "repo_url": "https://github.com/pyMC-dev/pyMC_core.git",
+      "github_slug": "pyMC-dev/pyMC_core",
+      "repo_build_arg": "PYMC_CORE_REPO",
+      "ref_build_arg": "PYMC_CORE_REF",
+      "release_workflow_env": "PYMC_CORE_DEFAULT_REF",
+      "pinned_ref": "330e32d57b9321afd63c38e634fa076a5049afee",
+      "watched_ref": "main",
+      "release_critical": true,
+      "notes": "Direct wrapper build pin that replaces the pyMC Repeater dependency with a reviewed pyMC Core checkout."
+    },
+    {
+      "id": "pymc_console_dist",
+      "name": "pyMC Console dist",
+      "repo_url": "https://github.com/dmduran12/pymc_console-dist.git",
+      "github_slug": "dmduran12/pymc_console-dist",
+      "repo_build_arg": "PYMC_CONSOLE_REPO",
+      "ref_build_arg": "PYMC_CONSOLE_REF",
+      "release_workflow_env": "PYMC_CONSOLE_DEFAULT_REF",
+      "pinned_ref": "2d961cef1ae1a355eb06e34fba99788d9ffca44a",
+      "watched_ref": "main",
+      "release_critical": true,
+      "notes": "Frontend distribution copied unchanged into the wrapper image."
+    }
+  ]
+}

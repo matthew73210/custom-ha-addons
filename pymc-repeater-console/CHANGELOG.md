@@ -2,6 +2,9 @@
 
 ## 0.3.2
 
+- Added the read-only **Check pyMC Upstream Mergeability** scheduled/manual workflow for pyMC Repeater, pyMC Core, and pyMC Console dist.
+- Pinned release/default wrapper builds to the reviewed upstream SHAs recorded in compatibility metadata; watched upstream refs are tested temporarily and must be pinned manually after review.
+- Kept upstream-watch CI non-publishing and non-mutating: it cannot publish images, push commits, rewrite refs, or patch upstream source.
 - Audited bundled pyMC Console `0.9.329` API, auth, WebSocket, static, and Carto map paths against the transparent ingress proxy.
 - Expanded failure-only Nginx diagnostics to cover all forwarded `/auth/*`, `/api/*`, and `/ws/*` paths so frontend/upstream route drift is visible without logging successful API traffic.
 - Added startup LBT diagnostics for the selected upstream radio path, configured `pymc_usb` or `pymc_tcp` LBT settings, and the count of stored packets with `lbt_attempts > 0`.

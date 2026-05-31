@@ -1,0 +1,397 @@
+name: Check pyMC Upstream Mergeability
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ADDON_DIR: pymc-repeater-console
+  WATCH_MANIFEST: pymc-repeater-console/compatibility/upstream-watch.json
+
+jobs:
+  detect_drift:
+    name: Resolve watched upstream refs
+    runs-on: ubuntu-latest
+    outputs:
+      drift: ${{ steps.resolve.outputs.drift }}
+      inconclusive: ${{ steps.resolve.outputs.inconclusive }}
+      config_mismatch: ${{ steps.resolve.outputs.config_mismatch }}
+      tracking_report: ${{ steps.resolve.outputs.tracking_report }}
+      manual_pins: ${{ steps.resolve.outputs.manual_pins }}
+      pymc_repeater_repo: ${{ steps.resolve.outputs.pymc_repeater_repo }}
+      pymc_repeater_watched_sha: ${{ steps.resolve.outputs.pymc_repeater_watched_sha }}
+      pymc_core_repo: ${{ steps.resolve.outputs.pymc_core_repo }}
+      pymc_core_watched_sha: ${{ steps.resolve.outputs.pymc_core_watched_sha }}
+      pymc_console_dist_repo: ${{ steps.resolve.outputs.pymc_console_dist_repo }}
+      pymc_console_dist_watched_sha: ${{ steps.resolve.outputs.pymc_console_dist_watched_sha }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Resolve pinned and watched upstream refs
+        id: resolve
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import tempfile
+
+          manifest_path = pathlib.Path(os.environ["WATCH_MANIFEST"])
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          upstreams = manifest["upstreams"]
+          output_path = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          def output(name: str, value: str) -> None:
+              marker = "__PYMC_UPSTREAM_OUTPUT__"
+              with output_path.open("a", encoding="utf-8") as handle:
+                  handle.write(f"{name}<<{marker}\n{value}\n{marker}\n")
+
+          def git(*args: str, cwd: str | None = None) -> str:
+              result = subprocess.run(
+                  ["git", *args],
+                  cwd=cwd,
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  text=True,
+              )
+              if result.returncode:
+                  detail = result.stderr.strip() or result.stdout.strip()
+                  raise RuntimeError(f"git {' '.join(args)} failed: {detail}")
+              return result.stdout.strip()
+
+          rows = []
+          details = []
+          manual_pins = []
+          any_drift = False
+          inconclusive = False
+          config_mismatches = []
+          dockerfile = pathlib.Path("pymc-repeater-console/Dockerfile").read_text(encoding="utf-8")
+          release_workflow = pathlib.Path(".github/workflows/build-pymc-repeater-console.yml").read_text(encoding="utf-8")
+
+          for upstream in upstreams:
+              upstream_id = upstream["id"]
+              name = upstream["name"]
+              repo = upstream["repo_url"]
+              pinned_ref = upstream["pinned_ref"]
+              watched_ref = upstream["watched_ref"]
+              compare_url = (
+                  f"https://github.com/{upstream['github_slug']}/compare/"
+                  f"{pinned_ref}...{watched_ref}"
+              )
+              pinned_sha = "unresolved"
+              watched_sha = "unresolved"
+              status = "CHECK INCONCLUSIVE"
+              commits = []
+
+              docker_match = re.search(
+                  rf"^ARG {re.escape(upstream['ref_build_arg'])}=(\S+)$",
+                  dockerfile,
+                  re.MULTILINE,
+              )
+              workflow_match = re.search(
+                  rf"^  {re.escape(upstream['release_workflow_env'])}: (\S+)$",
+                  release_workflow,
+                  re.MULTILINE,
+              )
+              if not docker_match or docker_match.group(1) != pinned_ref:
+                  config_mismatches.append(
+                      f"- Dockerfile `{upstream['ref_build_arg']}` does not match reviewed pin `{pinned_ref}`."
+                  )
+              if not workflow_match or workflow_match.group(1) != pinned_ref:
+                  config_mismatches.append(
+                      f"- Release workflow `{upstream['release_workflow_env']}` does not match reviewed pin `{pinned_ref}`."
+                  )
+
+              try:
+                  with tempfile.TemporaryDirectory(prefix=f"{upstream_id}-") as checkout:
+                      git("init", "-q", checkout)
+                      git("-C", checkout, "remote", "add", "origin", repo)
+                      git("-C", checkout, "fetch", "--quiet", "--no-tags", "--depth=1", "origin", pinned_ref)
+                      pinned_sha = git("-C", checkout, "rev-parse", "FETCH_HEAD")
+                      git("-C", checkout, "fetch", "--quiet", "--no-tags", "--depth=100", "origin", watched_ref)
+                      watched_sha = git("-C", checkout, "rev-parse", "FETCH_HEAD")
+                      if pinned_sha == watched_sha:
+                          status = "no drift"
+                      else:
+                          status = "drift"
+                          any_drift = True
+                          try:
+                              log = git(
+                                  "-C",
+                                  checkout,
+                                  "log",
+                                  "--format=- `%h` %s",
+                                  "--max-count=20",
+                                  f"{pinned_sha}..{watched_sha}",
+                              )
+                              commits = [line for line in log.splitlines() if line]
+                          except RuntimeError:
+                              commits = []
+              except RuntimeError as exc:
+                  inconclusive = True
+                  commits = [f"- Ref resolution failed: `{exc}`"]
+
+              output(f"{upstream_id}_repo", repo)
+              output(f"{upstream_id}_pinned_ref", pinned_ref)
+              output(f"{upstream_id}_pinned_sha", pinned_sha)
+              output(f"{upstream_id}_watched_ref", watched_ref)
+              output(f"{upstream_id}_watched_sha", watched_sha)
+              output(f"{upstream_id}_compare_url", compare_url)
+              rows.append(
+                  f"| {name} | {str(upstream['release_critical']).lower()} | `{pinned_ref}` | `{pinned_sha}` | "
+                  f"`{watched_ref}` | `{watched_sha}` | {status} |"
+              )
+              details.append(f"### [{name}]({compare_url})")
+              if commits:
+                  details.extend(commits)
+              elif status == "drift":
+                  details.append(f"- Commit list unavailable; use the [compare link]({compare_url}).")
+              else:
+                  details.append(f"- [Compare pinned and watched refs]({compare_url})")
+              manual_pins.append(f"{upstream['ref_build_arg']}={watched_sha}")
+
+          report = "\n".join(
+              [
+                  "## Tracked upstreams",
+                  "",
+                  "| Upstream | Release-critical | Pinned ref | Pinned SHA | Watched ref | Watched SHA | Drift status |",
+                  "| --- | --- | --- | --- | --- | --- | --- |",
+                  *rows,
+                  "",
+                  "## Upstream comparisons",
+                  "",
+                  *details,
+                  "",
+                  "## Release-pin alignment",
+                  "",
+                  *(config_mismatches or ["- Dockerfile defaults, publishing workflow refs, and watch-manifest pins are aligned."]),
+              ]
+          )
+          output("drift", "true" if any_drift else "false")
+          output("inconclusive", "true" if inconclusive else "false")
+          output("config_mismatch", "true" if config_mismatches else "false")
+          output("tracking_report", report)
+          output("manual_pins", "\n".join(manual_pins))
+          with summary_path.open("a", encoding="utf-8") as handle:
+              handle.write("# pyMC upstream merge-readiness: drift detection\n\n")
+              handle.write(report)
+              handle.write("\n\nThis workflow is read-only. It does not update release pins or publish images.\n")
+          PY
+
+  candidate_test:
+    name: Build and test watched upstream SHAs
+    runs-on: ubuntu-latest
+    needs:
+      - detect_drift
+    if: needs.detect_drift.outputs.drift == 'true' && needs.detect_drift.outputs.inconclusive == 'false'
+    outputs:
+      docker_available: ${{ steps.results.outputs.docker_available }}
+      build_result: ${{ steps.results.outputs.build_result }}
+      source_test_result: ${{ steps.results.outputs.source_test_result }}
+      metadata_result: ${{ steps.results.outputs.metadata_result }}
+      live_test_result: ${{ steps.results.outputs.live_test_result }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install contract test dependencies
+        run: python3 -m pip install --upgrade pytest
+
+      - name: Check Docker availability
+        id: docker
+        run: |
+          if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            echo "Docker is available."
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::Docker is unavailable; merge-readiness is inconclusive."
+          fi
+
+      - name: Read add-on version
+        id: addon
+        run: |
+          version="$(ruby -ryaml -e 'puts YAML.load_file(File.join(ENV.fetch("ADDON_DIR"), "config.yaml")).fetch("version")')"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Add-on version: ${version}"
+
+      - name: Run source-level wrapper boundary and route inventory tests
+        id: source_contracts
+        continue-on-error: true
+        run: |
+          PYMC_REPEATER_CONSOLE_SKIP_DOCKER=1 \
+            python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
+
+      - name: Build temporary watched-upstream image
+        id: candidate_build
+        if: steps.docker.outputs.available == 'true'
+        continue-on-error: true
+        run: |
+          docker build \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg BUILD_VERSION="${{ steps.addon.outputs.version }}-upstream-watch" \
+            --build-arg PYMC_REPEATER_REPO="${{ needs.detect_drift.outputs.pymc_repeater_repo }}" \
+            --build-arg PYMC_REPEATER_REF="${{ needs.detect_drift.outputs.pymc_repeater_watched_sha }}" \
+            --build-arg PYMC_CORE_REPO="${{ needs.detect_drift.outputs.pymc_core_repo }}" \
+            --build-arg PYMC_CORE_REF="${{ needs.detect_drift.outputs.pymc_core_watched_sha }}" \
+            --build-arg PYMC_CONSOLE_REPO="${{ needs.detect_drift.outputs.pymc_console_dist_repo }}" \
+            --build-arg PYMC_CONSOLE_REF="${{ needs.detect_drift.outputs.pymc_console_dist_watched_sha }}" \
+            -t pymc-repeater-console:upstream-watch \
+            -f "${ADDON_DIR}/Dockerfile" \
+            "${ADDON_DIR}"
+
+      - name: Create CI-safe contract config fixture
+        id: contract_config
+        if: steps.candidate_build.outcome == 'success'
+        run: |
+          config_dir="${RUNNER_TEMP}/pymc-upstream-watch-config"
+          mkdir -p "${config_dir}/pymc-repeater"
+          cp "${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml" "${config_dir}/pymc-repeater/config.yaml"
+          ruby -ryaml -e 'YAML.load_file(ARGV.fetch(0)); puts "YAML ok: #{ARGV.fetch(0)}"' "${config_dir}/pymc-repeater/config.yaml"
+          echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Show temporary image upstream metadata
+        id: metadata
+        if: steps.candidate_build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "${{ steps.contract_config.outputs.config_dir }}:/config:ro" \
+            --entrypoint python3 \
+            pymc-repeater-console:upstream-watch \
+            -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
+
+      - name: Run live container contract tests
+        id: live_contracts
+        if: steps.metadata.outcome == 'success'
+        continue-on-error: true
+        env:
+          PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:upstream-watch
+          PYMC_REPEATER_CONSOLE_CONFIG_DIR: ${{ steps.contract_config.outputs.config_dir }}
+          PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
+        run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
+
+      - name: Show container logs after failed live tests
+        if: steps.live_contracts.outcome == 'failure'
+        run: |
+          docker ps -a --filter "name=pymc-contract-" --format "{{.Names}}" | while read -r name; do
+            echo "::group::${name} logs"
+            docker logs "${name}" || true
+            echo "::endgroup::"
+          done
+
+      - name: Record candidate test results
+        id: results
+        if: always()
+        run: |
+          echo "docker_available=${{ steps.docker.outputs.available }}" >> "${GITHUB_OUTPUT}"
+          echo "build_result=${{ steps.candidate_build.outcome }}" >> "${GITHUB_OUTPUT}"
+          echo "source_test_result=${{ steps.source_contracts.outcome }}" >> "${GITHUB_OUTPUT}"
+          echo "metadata_result=${{ steps.metadata.outcome }}" >> "${GITHUB_OUTPUT}"
+          echo "live_test_result=${{ steps.live_contracts.outcome }}" >> "${GITHUB_OUTPUT}"
+
+  verdict:
+    name: Report merge-readiness verdict
+    runs-on: ubuntu-latest
+    needs:
+      - detect_drift
+      - candidate_test
+    if: always()
+
+    steps:
+      - name: Write merge-readiness report
+        env:
+          DRIFT: ${{ needs.detect_drift.outputs.drift }}
+          DETECT_INCONCLUSIVE: ${{ needs.detect_drift.outputs.inconclusive }}
+          CONFIG_MISMATCH: ${{ needs.detect_drift.outputs.config_mismatch }}
+          TRACKING_REPORT: ${{ needs.detect_drift.outputs.tracking_report }}
+          MANUAL_PINS: ${{ needs.detect_drift.outputs.manual_pins }}
+          DOCKER_AVAILABLE: ${{ needs.candidate_test.outputs.docker_available }}
+          BUILD_RESULT: ${{ needs.candidate_test.outputs.build_result }}
+          SOURCE_TEST_RESULT: ${{ needs.candidate_test.outputs.source_test_result }}
+          METADATA_RESULT: ${{ needs.candidate_test.outputs.metadata_result }}
+          LIVE_TEST_RESULT: ${{ needs.candidate_test.outputs.live_test_result }}
+        run: |
+          verdict="CHECK INCONCLUSIVE"
+          if [ "${DETECT_INCONCLUSIVE}" = "true" ]; then
+            reason="One or more upstream refs could not be resolved."
+          elif [ "${CONFIG_MISMATCH}" = "true" ]; then
+            verdict="NOT MERGE READY"
+            reason="Release-pin configuration is inconsistent across the Dockerfile, publishing workflow, and watch manifest."
+          elif [ "${DRIFT}" = "false" ]; then
+            verdict="NO UPSTREAM DRIFT"
+            reason="Every watched upstream ref resolves to its reviewed pinned SHA."
+          elif [ "${DOCKER_AVAILABLE}" != "true" ]; then
+            reason="Upstream drift exists, but Docker was unavailable for the required temporary build."
+          elif [ "${SOURCE_TEST_RESULT}" = "failure" ] || \
+               [ "${BUILD_RESULT}" = "failure" ] || \
+               [ "${METADATA_RESULT}" = "failure" ] || \
+               [ "${LIVE_TEST_RESULT}" = "failure" ]; then
+            verdict="NOT MERGE READY"
+            reason="Upstream drift exists and at least one required temporary build, metadata, wrapper-boundary, route-inventory, or live contract check failed."
+          elif [ "${SOURCE_TEST_RESULT}" != "success" ] || \
+               [ "${BUILD_RESULT}" != "success" ] || \
+               [ "${METADATA_RESULT}" != "success" ] || \
+               [ "${LIVE_TEST_RESULT}" != "success" ]; then
+            reason="Upstream drift exists, but the required test environment did not complete every merge-readiness check."
+          else
+            verdict="MERGE READY"
+            reason="Upstream drift exists and the temporary watched-SHA image passed build, metadata, wrapper-boundary, route-inventory, and live contract checks."
+          fi
+
+          {
+            echo "# pyMC upstream merge-readiness report"
+            echo
+            echo "## Final verdict: ${verdict}"
+            echo
+            echo "${reason}"
+            echo
+            printf '%s\n' "${TRACKING_REPORT}"
+            echo
+            echo "## Temporary build and test results"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Docker available | ${DOCKER_AVAILABLE:-not run} |"
+            echo "| Temporary watched-SHA build | ${BUILD_RESULT:-not run} |"
+            echo "| Wrapper-boundary and route-inventory contracts | ${SOURCE_TEST_RESULT:-not run} |"
+            echo "| Temporary image metadata inspection | ${METADATA_RESULT:-not run} |"
+            echo "| Live container contracts and smoke tests | ${LIVE_TEST_RESULT:-not run} |"
+            echo
+            echo "## Release safety"
+            echo
+            echo "This workflow does not update release pins, push commits, publish images, or modify upstream source."
+            if [ "${verdict}" = "MERGE READY" ]; then
+              echo
+              echo "After maintainer review, manually pin these exact refs:"
+              echo
+              echo '```text'
+              printf '%s\n' "${MANUAL_PINS}"
+              echo '```'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "Final verdict: ${verdict}"
+          echo "${reason}"
+          if [ "${verdict}" = "NOT MERGE READY" ]; then
+            exit 1
+          fi

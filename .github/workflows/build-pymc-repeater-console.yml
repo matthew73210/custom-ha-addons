@@ -12,19 +12,9 @@ on:
   pull_request:
     paths:
       - ".github/workflows/build-pymc-repeater-console.yml"
+      - ".github/workflows/check-pymc-upstream-mergeability.yml"
       - "pymc-repeater-console/**"
   workflow_dispatch:
-    inputs:
-      pymc_repeater_candidate_ref:
-        description: "Non-release pyMC Repeater candidate ref to build/test, for example main, dev, or a feature branch"
-        required: false
-        default: ""
-      pymc_console_candidate_ref:
-        description: "Non-release pyMC Console dist candidate ref to build/test"
-        required: false
-        default: ""
-  schedule:
-    - cron: "23 4 * * *"
 
 permissions:
   contents: read
@@ -33,11 +23,9 @@ permissions:
 env:
   ADDON_DIR: pymc-repeater-console
   IMAGE_OWNER: matthew73210
-  PYMC_REPEATER_DEFAULT_REF: main
-  PYMC_CORE_DEFAULT_REF: main
-  PYMC_CONSOLE_DEFAULT_REF: main
-  PYMC_REPEATER_CANDIDATE_REF: ${{ vars.PYMC_REPEATER_CANDIDATE_REF || 'main' }}
-  PYMC_CONSOLE_CANDIDATE_REF: ${{ vars.PYMC_CONSOLE_CANDIDATE_REF || 'main' }}
+  PYMC_REPEATER_DEFAULT_REF: e17d1137ab2d2d5b86d03c99523272289b7688aa
+  PYMC_CORE_DEFAULT_REF: 330e32d57b9321afd63c38e634fa076a5049afee
+  PYMC_CONSOLE_DEFAULT_REF: 2d961cef1ae1a355eb06e34fba99788d9ffca44a
 
 jobs:
   validate:
@@ -53,10 +41,35 @@ jobs:
           ruby -ryaml -e 'ARGV.each { |p| YAML.load_file(p); puts "YAML ok: #{p}" }' \
             "${ADDON_DIR}/config.yaml" \
             "${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml" \
-            ".github/workflows/build-pymc-repeater-console.yml"
+            ".github/workflows/build-pymc-repeater-console.yml" \
+            ".github/workflows/check-pymc-upstream-mergeability.yml"
           ruby -rjson -e 'ARGV.each { |p| JSON.parse(File.read(p)); puts "JSON ok: #{p}" }' \
             "repository.json" \
-            "${ADDON_DIR}/compatibility/known-good-upstreams.json"
+            "${ADDON_DIR}/compatibility/known-good-upstreams.json" \
+            "${ADDON_DIR}/compatibility/upstream-watch.json"
+
+      - name: Check reviewed upstream pins remain aligned
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+
+          addon = pathlib.Path("pymc-repeater-console")
+          manifest = json.loads((addon / "compatibility/upstream-watch.json").read_text(encoding="utf-8"))
+          dockerfile = (addon / "Dockerfile").read_text(encoding="utf-8")
+          workflow = pathlib.Path(".github/workflows/build-pymc-repeater-console.yml").read_text(encoding="utf-8")
+
+          for upstream in manifest["upstreams"]:
+              pinned_ref = upstream["pinned_ref"]
+              docker_match = re.search(rf"^ARG {re.escape(upstream['ref_build_arg'])}=(\S+)$", dockerfile, re.MULTILINE)
+              workflow_match = re.search(rf"^  {re.escape(upstream['release_workflow_env'])}: (\S+)$", workflow, re.MULTILINE)
+              if not docker_match or docker_match.group(1) != pinned_ref:
+                  raise SystemExit(f"Dockerfile {upstream['ref_build_arg']} does not match reviewed pin {pinned_ref}")
+              if not workflow_match or workflow_match.group(1) != pinned_ref:
+                  raise SystemExit(f"Workflow {upstream['release_workflow_env']} does not match reviewed pin {pinned_ref}")
+              print(f"Aligned reviewed pin: {upstream['name']} {pinned_ref}")
+          PY
 
       - name: Validate shell startup scripts
         run: |
@@ -359,102 +372,3 @@ jobs:
             org.opencontainers.image.pymc_console.ref=${{ env.PYMC_CONSOLE_DEFAULT_REF }}
           cache-from: type=gha,scope=pymc-repeater-console-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=pymc-repeater-console-${{ matrix.arch }}
-
-  upstream-candidate-drift:
-    name: Test upstream candidate drift
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs:
-      - validate
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install contract test dependencies
-        run: python3 -m pip install --upgrade pytest
-
-      - name: Resolve upstream candidate refs
-        id: candidate
-        run: |
-          repeater_ref="${{ github.event_name == 'workflow_dispatch' && inputs.pymc_repeater_candidate_ref || '' }}"
-          console_ref="${{ github.event_name == 'workflow_dispatch' && inputs.pymc_console_candidate_ref || '' }}"
-          if [ -z "${repeater_ref}" ]; then
-            repeater_ref="${PYMC_REPEATER_CANDIDATE_REF}"
-          fi
-          if [ -z "${console_ref}" ]; then
-            console_ref="${PYMC_CONSOLE_CANDIDATE_REF}"
-          fi
-          echo "pymc_repeater_ref=${repeater_ref}" >> "${GITHUB_OUTPUT}"
-          echo "pymc_console_ref=${console_ref}" >> "${GITHUB_OUTPUT}"
-          echo "Candidate pyMC Repeater ref: ${repeater_ref}"
-          echo "Candidate pyMC Console dist ref: ${console_ref}"
-
-      - name: Read add-on version
-        id: addon
-        run: |
-          version="$(ruby -ryaml -e 'puts YAML.load_file(File.join(ENV.fetch("ADDON_DIR"), "config.yaml")).fetch("version")')"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "Add-on version: ${version}"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build upstream candidate image
-        run: |
-          docker build \
-            --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm \
-            --build-arg BUILD_ARCH=amd64 \
-            --build-arg BUILD_VERSION="${{ steps.addon.outputs.version }}-candidate" \
-            --build-arg PYMC_REPEATER_REF="${{ steps.candidate.outputs.pymc_repeater_ref }}" \
-            --build-arg PYMC_CONSOLE_REF="${{ steps.candidate.outputs.pymc_console_ref }}" \
-            -t pymc-repeater-console:contract-candidate \
-            -f "${ADDON_DIR}/Dockerfile" \
-            "${ADDON_DIR}"
-
-      - name: Create CI-safe candidate contract config fixture
-        id: candidate_config
-        run: |
-          config_dir="${RUNNER_TEMP}/pymc-candidate-contract-config"
-          mkdir -p "${config_dir}/pymc-repeater"
-          cp "${ADDON_DIR}/tests/contract/fixtures/ci-safe-config.yaml" "${config_dir}/pymc-repeater/config.yaml"
-          ruby -ryaml -e 'YAML.load_file(ARGV.fetch(0)); puts "YAML ok: #{ARGV.fetch(0)}"' "${config_dir}/pymc-repeater/config.yaml"
-          if grep -q "radio_type: sx1262" "${config_dir}/pymc-repeater/config.yaml"; then
-            echo "ERROR: candidate contract config must not use hardware sx1262"
-            exit 1
-          fi
-          echo "config_dir=${config_dir}" >> "${GITHUB_OUTPUT}"
-          echo "Candidate contract config: ${config_dir}/pymc-repeater/config.yaml"
-
-      - name: Show upstream candidate build metadata
-        run: |
-          docker run --rm \
-            -v "${{ steps.candidate_config.outputs.config_dir }}:/config:ro" \
-            --entrypoint python3 \
-            pymc-repeater-console:contract-candidate \
-            -m json.tool /usr/share/pymc-repeater-console/upstream-build-info.json
-
-      - name: Run contract tests against upstream candidate
-        env:
-          PYMC_REPEATER_CONSOLE_IMAGE: pymc-repeater-console:contract-candidate
-          PYMC_REPEATER_CONSOLE_CONFIG_DIR: ${{ steps.candidate_config.outputs.config_dir }}
-          PYMC_REPEATER_CONSOLE_TEST_TIMEOUT: "90"
-        run: python3 -m pytest -vv "${ADDON_DIR}/tests/contract"
-
-      - name: Report upstream candidate drift
-        if: failure()
-        run: |
-          echo "Upstream candidate drift or contract change detected."
-          echo "Default release builds are not automatically broken by this result."
-          echo "Candidate pyMC Repeater ref: ${{ steps.candidate.outputs.pymc_repeater_ref }}"
-          echo "Candidate pyMC Console dist ref: ${{ steps.candidate.outputs.pymc_console_ref }}"
-          docker ps -a --filter "name=pymc-contract-" --format "{{.Names}}" | while read -r name; do
-            echo "::group::${name} logs"
-            docker logs "${name}" || true
-            echo "::endgroup::"
-          done

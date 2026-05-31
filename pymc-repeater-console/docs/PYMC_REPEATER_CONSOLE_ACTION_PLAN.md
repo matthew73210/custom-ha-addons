@@ -76,7 +76,7 @@ Classification rules:
 | Hardcoded minified bundle rewrites | `pymc-repeater-ingress.conf` | Rewrites minified React/router snippets such as `history:r(...)` and `F.jsx(E7,...)`. | Suspicious | Depends on fragile upstream build internals and may silently break on upstream releases. | Remove where possible. Replace with path-level proxying or fail-fast contract tests. | High | Yes, in Phase 4 |
 | Carto map same-origin proxy | `pymc-repeater-ingress.conf` | Proxies Carto basemap and tile JSON and rewrites embedded URLs. | Suspicious | Mutates third-party JSON, though for browser same-origin/ingress transport. | Keep only if required; document as non-upstream transport exception and test it. | Medium | Maybe in Phase 4 |
 | Startup storage diagnostics | `rootfs/etc/s6-overlay/s6-rc.d/pymc-repeater/run` | Reads config and SQLite counts for logs only. | OK diagnostics | Does not serve upstream-looking API responses or alter behavior. | Keep as diagnostics; ensure secrets remain redacted. | Low | No |
-| Upstream release refs | `Dockerfile`, `.github/workflows/build-pymc-repeater-console.yml` | Dockerfile default refs now track upstream `main` for pyMC Repeater, pyMC_core, and pyMC Console dist, while build args can override refs for review or recovery. pyMC Repeater `main` contains `pymc_tcp` and `pymc_usb` config-file radio selection. | OK | Default builds follow current upstream while each image records resolved SHAs for review. | Keep `main` defaults until release policy changes. Use build args or candidate refs for alternate branches/tags/commits. | Medium | Build/CI behavior only |
+| Upstream release refs | `Dockerfile`, `.github/workflows/build-pymc-repeater-console.yml`, `compatibility/upstream-watch.json` | Dockerfile and publishing workflow defaults use reviewed commit SHAs for pyMC Repeater, pyMC Core, and pyMC Console dist. The watch manifest compares those pins with upstream `main`, while build args can override refs temporarily for review or recovery. | OK | Release builds remain reproducible while scheduled/manual CI reports whether watched upstream SHAs look safe to pin manually. | Keep release pins aligned across the Dockerfile, publishing workflow, and watch manifest. Update them only through maintainer-reviewed commits. | Medium | Build/CI behavior only |
 | Missing contract tests | `tests/contract/` | No contract test suite exists. | Suspicious process gap | Wrapper purity relies on manual inspection. | Add container and route tests proving transparent proxying and clear failures. | High | No direct runtime change |
 
 ## 4. Priority Order
@@ -155,9 +155,9 @@ Goal: make CI explain whether the wrapper or upstream changed.
 - Release workflow builds and publishes the configured default refs.
 - CI validates wrapper source, metadata, config-file-only add-on settings, forbidden compat API routing, removed minified rewrite patterns, and Dockerfile parsing.
 - CI builds an amd64 default-ref image and runs the contract suite against it with a CI-safe persisted config fixture using upstream-accepted `radio_type: none`; this avoids requiring `/dev/gpiochip0` while preserving the real runtime `sx1262` guard.
-- Scheduled/manual candidate workflow tests configurable upstream candidate refs without publishing release images.
-- Candidate refs use `PYMC_REPEATER_CANDIDATE_REF` and `PYMC_CONSOLE_CANDIDATE_REF`; `main` may be the default, but `dev` or feature branches remain supported for future upstream work.
-- CI failure text distinguishes wrapper validation failures, default upstream build/test failures, and upstream candidate drift or contract changes.
+- Scheduled/manual **Check pyMC Upstream Mergeability** workflow compares reviewed pins with manifest watched refs and tests exact watched SHAs without publishing release images.
+- The watch manifest tracks pyMC Repeater, pyMC Core, and pyMC Console dist; watched refs may be `main`, `dev`, or another reviewed branch.
+- CI failure text distinguishes wrapper validation failures, default upstream build/test failures, upstream drift, inconclusive infrastructure checks, and merge-readiness contract changes.
 - pyMC USB local serial and remote TCP/IP runtime configuration remains in `/config/pymc-repeater/config.yaml`; no Home Assistant runtime options are restored.
 
 Deliverable: CI that protects wrapper purity and upstream contract visibility.
@@ -167,7 +167,7 @@ Deliverable: CI that protects wrapper purity and upstream contract visibility.
 - Should `console_compat_api.py` be removed immediately, or kept temporarily behind explicit compatibility mode?
 - If compatibility mode exists temporarily, should it default to off? Recommended answer: **yes, default off**.
 - Should analytics pages be disabled or clearly marked unsupported if upstream does not provide analytics APIs? Recommended answer: **yes**.
-- Should releases pin upstream commits while dev builds can test candidate refs? Current answer: **no for this review branch; Dockerfile defaults track upstream `main`, release workflow publishes the configured default refs, and scheduled/manual candidate CI may test `main`, `dev`, feature branches, or explicit SHAs without publishing**.
+- Should releases pin upstream commits while CI tests watched refs? Current answer: **yes; Dockerfile and publishing workflow defaults use reviewed SHAs, and scheduled/manual upstream-watch CI tests exact watched SHAs without publishing**.
 - Which ingress rewrites are strictly transport-only?
   - Path prefix joins for fetch, XHR, EventSource, WebSocket, Worker, static assets.
   - `X-Forwarded-*`, `X-Ingress-Path`, cookie path, and redirect path adaptation.
@@ -222,8 +222,8 @@ Done means:
 - `/api/recent_packets`, `/api/bulk_packets`, and `/api/filtered_packets` are proxied to upstream when upstream provides them.
 - `/api/analytics/*` is not faked when upstream does not provide it.
 - Auth behavior for proxied upstream APIs remains upstream auth behavior.
-- Upstream refs default to `main` for release/default builds.
-- Scheduled CI tests configurable upstream candidate refs without publishing release images.
+- Upstream refs default to reviewed commit SHAs for release/default builds.
+- Scheduled/manual CI compares those pins with watched refs and tests drifted SHAs without publishing release images.
 - Contract tests pass.
 - Requested refs and resolved upstream SHAs are recorded.
 - The action plan and supporting docs clearly distinguish ingress proxying from API reimplementation.

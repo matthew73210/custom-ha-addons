@@ -12,46 +12,67 @@ pyMC Repeater:
 - GitHub slug: `pyMC-dev/pyMC_Repeater`
 - Build argument: `PYMC_REPEATER_REF`
 
+pyMC Core:
+
+- Repository: `https://github.com/pyMC-dev/pyMC_core.git`
+- GitHub slug: `pyMC-dev/pyMC_core`
+- Build argument: `PYMC_CORE_REF`
+
 pyMC Console dist:
 
 - Repository: `https://github.com/dmduran12/pymc_console-dist.git`
 - GitHub slug: `dmduran12/pymc_console-dist`
 - Build argument: `PYMC_CONSOLE_REF`
 
-Current default upstream refs and the latest observed resolved SHAs are recorded in `compatibility/known-good-upstreams.json`.
+Reviewed release refs are recorded in `compatibility/known-good-upstreams.json`. Watched refs and their reviewed comparison baselines are recorded in `compatibility/upstream-watch.json`.
 
 ## Current Default Upstream Refs
 
-Current default refs:
+Current reviewed release pins:
 
-- pyMC Repeater: `main`
-- pyMC_core: `main`
-- pyMC Console dist: `main`
+- pyMC Repeater: `e17d1137ab2d2d5b86d03c99523272289b7688aa`
+- pyMC Core: `330e32d57b9321afd63c38e634fa076a5049afee`
+- pyMC Console dist: `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 
-These moving refs are the Dockerfile defaults for review and release/default builds. The Docker build records the resolved commit SHA for each image, so published images remain inspectable even though the requested ref is `main`. On 2026-05-29, pyMC Repeater `main` included the config-file radio selection branches for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
+These fixed SHAs are the Dockerfile defaults and the publishing workflow defaults. On 2026-05-29, the reviewed pyMC Repeater pin included the config-file radio selection branches for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
 
 ## Release Policy
 
-Release/default builds currently track upstream `main`:
+Release/default builds use reviewed commit SHAs:
 
-- `PYMC_REPEATER_REF=main`
-- `PYMC_CORE_REF=main`
-- `PYMC_CONSOLE_REF=main`
+- `PYMC_REPEATER_REF=e17d1137ab2d2d5b86d03c99523272289b7688aa`
+- `PYMC_CORE_REF=330e32d57b9321afd63c38e634fa076a5049afee`
+- `PYMC_CONSOLE_REF=2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 
-Builds may override refs manually with Docker build args when review or recovery needs a branch, tag, or explicit commit SHA. CI also has an upstream-candidate path for testing alternate moving or feature refs without publishing release images.
+The authoritative release pin locations are:
 
-Candidate refs are configurable:
+- `pymc-repeater-console/Dockerfile`: default `PYMC_*_REF` build arguments for local/default builds.
+- `.github/workflows/build-pymc-repeater-console.yml`: `PYMC_*_DEFAULT_REF` values used by release image builds.
 
-- `PYMC_REPEATER_CANDIDATE_REF`
-- `PYMC_CONSOLE_CANDIDATE_REF`
+`compatibility/upstream-watch.json` mirrors the reviewed baseline for drift comparison and reporting. `compatibility/known-good-upstreams.json` is the review record. The normal validation workflow checks that the Dockerfile, publishing workflow, and watch manifest remain aligned.
 
-The default candidate ref may be `main`, but it is not required to be `main`. For future upstream work that lives on `dev` or a feature branch before reaching upstream `main`, set the candidate ref to that branch explicitly.
+Build args may still override refs temporarily when review or recovery needs a branch, tag, or explicit commit SHA. Temporary override builds do not change release pins.
 
-Scheduled and manual candidate jobs should:
+After a `MERGE READY` result and maintainer review, update all authoritative pin locations and both compatibility JSON files in one normal pull request. Do not have CI update refs or push a pin-update commit.
 
-- Avoid publishing release images.
-- Report failures as upstream candidate drift or contract change unless wrapper code changed.
-- Produce actionable failure text that says which upstream route, asset, schema, or WebSocket expectation changed.
+## Merge-Readiness Workflow
+
+The **Check pyMC Upstream Mergeability** GitHub Actions workflow runs daily and supports `workflow_dispatch`. It reads `compatibility/upstream-watch.json`, resolves each pinned ref and watched ref, lists drift commits when possible, and includes GitHub compare links.
+
+When drift exists, the workflow builds one temporary amd64 image with exact watched SHAs passed through Docker build arguments. It runs source-level wrapper-boundary and route-inventory tests, inspects the temporary image metadata, and runs the live container contract and smoke suite. The temporary image is local to the job.
+
+The workflow has `contents: read` permission only. It never publishes images, pushes commits, edits refs, or modifies upstream source. Images are never published because the result is review evidence, not a release.
+
+Run it manually from **Actions -> Check pyMC Upstream Mergeability -> Run workflow**.
+
+Verdicts:
+
+- `MERGE READY`: drift exists; temporary build, metadata inspection, wrapper-boundary tests, route inventory, ingress contracts, and live smoke tests all pass with no obvious pin/config mismatch.
+- `NOT MERGE READY`: a required build or contract check fails, route inventory changes, wrapper boundaries break, or release-pin configuration is inconsistent.
+- `NO UPSTREAM DRIFT`: every watched ref resolves to its reviewed pinned SHA.
+- `CHECK INCONCLUSIVE`: refs cannot be resolved, Docker is unavailable, or the required test environment cannot finish.
+
+`NOT MERGE READY` fails the workflow job. `NO UPSTREAM DRIFT` and `MERGE READY` succeed. `CHECK INCONCLUSIVE` is intentionally a successful run with a clear warning in the job summary so transient infrastructure issues remain distinguishable from an upstream contract break.
 
 ## Build Metadata
 
@@ -114,32 +135,35 @@ Validation checks include:
 - Absence of removed minified frontend rewrite patterns.
 - Dockerfile parse checks.
 
-Scheduled and manual candidate jobs:
+Scheduled and manual upstream-watch jobs:
 
-- Build an amd64 image with candidate upstream refs.
+- Compare watched branches with reviewed release pins.
+- Build an amd64 image with exact watched SHAs only when drift exists.
 - Run the same contract tests.
 - Never publish release images.
-- Treat failure as upstream candidate drift or contract change, not as proof that default release builds are broken.
+- Treat failure as upstream drift or contract change, not as proof that pinned release builds are broken.
 
-## Scheduled Upstream-Candidate CI
+## Scheduled Upstream-Watch CI
 
 Scheduled CI should:
 
-- Build against configured upstream candidate refs.
+- Read pinned and watched refs from `compatibility/upstream-watch.json`.
+- Compare pinned and watched SHAs before building.
+- Build against exact watched SHAs only when drift exists.
 - Run contract tests.
-- Compare the scheduled result with default-ref results.
 - Report upstream drift separately from wrapper failures.
 - Avoid publishing release images.
 - Avoid adding compatibility shims in response to failures.
 
-Configure candidate refs with repository variables:
+The watched refs are manifest data, usually `main` or `dev`:
 
 ```text
-PYMC_REPEATER_CANDIDATE_REF=dev
-PYMC_CONSOLE_CANDIDATE_REF=main
+PYMC_REPEATER_REF=main
+PYMC_CORE_REF=main
+PYMC_CONSOLE_REF=main
 ```
 
-Manual workflow dispatch can override those values for a single run. For a future pyMC Repeater feature branch before it reaches upstream `main`, set `PYMC_REPEATER_CANDIDATE_REF` or the dispatch input to that branch name or commit SHA.
+Changing a watched ref is a reviewed repository edit. It affects tracking/reporting only; it does not update release pins.
 
 ## Contract Expectations
 
@@ -171,12 +195,12 @@ CI runs both source-level tests and live-container tests. Live-container tests r
 
 ## pyMC USB Tracking
 
-The default pyMC Repeater upstream `main` ref supports the pymc-usb-compatible modem family in two transport configurations:
+The reviewed pyMC Repeater release pin supports the pymc-usb-compatible modem family in two transport configurations:
 
 - Local serial: `radio_type: pymc_usb`, `pymc_usb.port`, optional `pymc_usb.baudrate`.
 - Remote TCP/IP: `radio_type: pymc_tcp`, `pymc_tcp.host`, `pymc_tcp.port`.
 
-Upstream `main` does not add `host`, `ip`, `tcp`, `socket`, `url`, or serial-over-TCP keys under `pymc_usb`; TCP/IP remains the `pymc_tcp` transport. The runtime USB serial path or remote TCP/IP endpoint is configured in `/config/pymc-repeater/config.yaml`; it is not a Home Assistant add-on UI option. See `docs/PYMC_USB.md` for the exact config shape and wrapper/device boundary.
+The reviewed release pin does not add `host`, `ip`, `tcp`, `socket`, `url`, or serial-over-TCP keys under `pymc_usb`; TCP/IP remains the `pymc_tcp` transport. The runtime USB serial path or remote TCP/IP endpoint is configured in `/config/pymc-repeater/config.yaml`; it is not a Home Assistant add-on UI option. See `docs/PYMC_USB.md` for the exact config shape and wrapper/device boundary.
 
 ## Failure Policy
 

@@ -21,10 +21,7 @@ The tests do not require Home Assistant Supervisor. Ingress behavior is simulate
 - `PYMC_REPEATER_CONSOLE_TEST_TIMEOUT`: startup and request timeout in seconds; default is `60`.
 - `PYMC_REPEATER_CONSOLE_CONFIG_DIR`: optional host config directory to mount as `/config` when tests start Docker.
 
-CI candidate-drift jobs also use upstream ref variables outside the pytest process:
-
-- `PYMC_REPEATER_CANDIDATE_REF`: pyMC Repeater candidate ref for non-release drift tests. Set to `main`, `dev`, a feature branch, or a commit SHA.
-- `PYMC_CONSOLE_CANDIDATE_REF`: pyMC Console dist candidate ref for non-release drift tests.
+The scheduled/manual **Check pyMC Upstream Mergeability** workflow reads `compatibility/upstream-watch.json`, resolves watched SHAs for pyMC Repeater, pyMC Core, and pyMC Console dist, and passes those SHAs into the temporary Docker build. It does not edit repository files or publish the temporary image.
 
 ## Run Against A Running Container
 
@@ -77,4 +74,4 @@ Phase 5 runs the suite in two ways:
 - Source-level mode with `PYMC_REPEATER_CONSOLE_SKIP_DOCKER=1`. Live-container tests are skipped, while source checks still validate routing, config persistence, and rewrite inventories.
 - Live-container mode against an amd64 image built from default upstream refs. These tests exercise startup, routes, ingress-style paths, WebSocket forwarding, and metadata checks.
 
-Scheduled/manual upstream-candidate CI builds a non-published amd64 image with candidate refs, then runs the same live suite. Candidate failures mean upstream drift or a contract change in the tested candidate; they do not automatically mean the default release image is broken.
+Scheduled/manual upstream-watch CI builds a non-published amd64 image with watched SHAs only when drift exists, then runs the same live suite. Candidate failures mean upstream drift or a contract change in the tested candidate; they do not automatically mean the pinned release image is broken.
