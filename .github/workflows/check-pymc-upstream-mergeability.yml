@@ -44,7 +44,6 @@ jobs:
           import pathlib
           import re
           import subprocess
-          import tempfile
 
           manifest_path = pathlib.Path(os.environ["WATCH_MANIFEST"])
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -57,10 +56,9 @@ jobs:
               with output_path.open("a", encoding="utf-8") as handle:
                   handle.write(f"{name}<<{marker}\n{value}\n{marker}\n")
 
-          def git(*args: str, cwd: str | None = None) -> str:
+          def git(*args: str) -> str:
               result = subprocess.run(
                   ["git", *args],
-                  cwd=cwd,
                   check=False,
                   stdout=subprocess.PIPE,
                   stderr=subprocess.PIPE,
@@ -70,6 +68,36 @@ jobs:
                   detail = result.stderr.strip() or result.stdout.strip()
                   raise RuntimeError(f"git {' '.join(args)} failed: {detail}")
               return result.stdout.strip()
+
+          def ls_remote(repo: str, *patterns: str) -> list[tuple[str, str]]:
+              output_text = git("ls-remote", repo, *patterns)
+              refs = []
+              for line in output_text.splitlines():
+                  if not line:
+                      continue
+                  sha, remote_ref = line.split(None, 1)
+                  refs.append((sha, remote_ref))
+              return refs
+
+          def resolve_ref(repo: str, ref: str) -> str:
+              if re.fullmatch(r"[0-9a-fA-F]{40}", ref):
+                  return ref.lower()
+              if ref == "HEAD":
+                  matches = ls_remote(repo, "HEAD")
+              elif ref.startswith("refs/tags/"):
+                  matches = ls_remote(repo, ref, f"{ref}^{{}}")
+              elif ref.startswith("refs/"):
+                  matches = ls_remote(repo, ref)
+              else:
+                  matches = ls_remote(repo, f"refs/heads/{ref}")
+                  if not matches:
+                      matches = ls_remote(repo, f"refs/tags/{ref}", f"refs/tags/{ref}^{{}}")
+                  if not matches:
+                      matches = ls_remote(repo, ref)
+              if not matches:
+                  raise RuntimeError(f"git ls-remote returned no match for repo={repo} ref={ref}")
+              peeled = [sha for sha, remote_ref in matches if remote_ref.endswith("^{}")]
+              return (peeled or [matches[0][0]])[0]
 
           rows = []
           details = []
@@ -115,33 +143,22 @@ jobs:
                   )
 
               try:
-                  with tempfile.TemporaryDirectory(prefix=f"{upstream_id}-") as checkout:
-                      git("init", "-q", checkout)
-                      git("-C", checkout, "remote", "add", "origin", repo)
-                      git("-C", checkout, "fetch", "--quiet", "--no-tags", "--depth=1", "origin", pinned_ref)
-                      pinned_sha = git("-C", checkout, "rev-parse", "FETCH_HEAD")
-                      git("-C", checkout, "fetch", "--quiet", "--no-tags", "--depth=100", "origin", watched_ref)
-                      watched_sha = git("-C", checkout, "rev-parse", "FETCH_HEAD")
-                      if pinned_sha == watched_sha:
-                          status = "no drift"
-                      else:
-                          status = "drift"
-                          any_drift = True
-                          try:
-                              log = git(
-                                  "-C",
-                                  checkout,
-                                  "log",
-                                  "--format=- `%h` %s",
-                                  "--max-count=20",
-                                  f"{pinned_sha}..{watched_sha}",
-                              )
-                              commits = [line for line in log.splitlines() if line]
-                          except RuntimeError:
-                              commits = []
-              except RuntimeError as exc:
+                  pinned_sha = resolve_ref(repo, pinned_ref)
+              except (OSError, RuntimeError, ValueError) as exc:
                   inconclusive = True
-                  commits = [f"- Ref resolution failed: `{exc}`"]
+                  commits.append(f"- Ref resolution failed for `{name}` pinned ref `{pinned_ref}` from `{repo}`: `{exc}`")
+              try:
+                  watched_sha = resolve_ref(repo, watched_ref)
+              except (OSError, RuntimeError, ValueError) as exc:
+                  inconclusive = True
+                  commits.append(f"- Ref resolution failed for `{name}` watched ref `{watched_ref}` from `{repo}`: `{exc}`")
+
+              if pinned_sha != "unresolved" and watched_sha != "unresolved":
+                  if pinned_sha == watched_sha:
+                      status = "no drift"
+                  else:
+                      status = "drift"
+                      any_drift = True
 
               output(f"{upstream_id}_repo", repo)
               output(f"{upstream_id}_pinned_ref", pinned_ref)
@@ -157,7 +174,7 @@ jobs:
               if commits:
                   details.extend(commits)
               elif status == "drift":
-                  details.append(f"- Commit list unavailable; use the [compare link]({compare_url}).")
+                  details.append(f"- Commit list is not fetched by the ls-remote-only resolve job; use the [compare link]({compare_url}).")
               else:
                   details.append(f"- [Compare pinned and watched refs]({compare_url})")
               manual_pins.append(f"{upstream['ref_build_arg']}={watched_sha}")

@@ -57,7 +57,7 @@ After a `MERGE READY` result and maintainer review, update all authoritative pin
 
 ## Merge-Readiness Workflow
 
-The **Check pyMC Upstream Mergeability** GitHub Actions workflow runs daily and supports `workflow_dispatch`. It reads `compatibility/upstream-watch.json`, resolves each pinned ref and watched ref, lists drift commits when possible, and includes GitHub compare links.
+The **Check pyMC Upstream Mergeability** GitHub Actions workflow runs daily and supports `workflow_dispatch`. It reads `compatibility/upstream-watch.json`, resolves each pinned ref and watched ref with `git ls-remote`, and includes GitHub compare links. The resolve job does not create temporary Git clones or worktrees.
 
 When drift exists, the workflow builds one temporary amd64 image with exact watched SHAs passed through Docker build arguments. It runs source-level wrapper-boundary and route-inventory tests, inspects the temporary image metadata, and runs the live container contract and smoke suite. The temporary image is local to the job.
 
