@@ -83,6 +83,130 @@ def extract_config_action() -> str:
     return script[start:end]
 
 
+def extract_preflight_action() -> str:
+    script = CONT_INIT_SCRIPT.read_text(encoding="utf-8")
+    start_marker = 'PREFLIGHT_RESULT="$("${PYTHON_BIN}" - <<\'PY\'\n'
+    start = script.index(start_marker) + len(start_marker)
+    end = script.index("\nPY\n)\" || {", start)
+    return script[start:end]
+
+
+class SilentFakeSerial:
+    def __init__(self):
+        self.closed = False
+        self.opened = False
+        self.reset_input_buffer_called = False
+        self.writes: list[bytes] = []
+        self.in_waiting = 0
+
+    def open(self):
+        self.opened = True
+
+    def close(self):
+        self.closed = True
+
+    def write(self, data: bytes) -> int:
+        self.writes.append(data)
+        return len(data)
+
+    def read(self, _size: int = 1) -> bytes:
+        return b""
+
+    def reset_input_buffer(self):
+        self.reset_input_buffer_called = True
+
+
+class FastFakeTime:
+    def __init__(self):
+        self.now = 0.0
+
+    def time(self) -> float:
+        self.now += 0.25
+        return self.now
+
+    def sleep(self, seconds: float):
+        self.now += seconds
+
+
+def pymc_usb_runtime_config(device_path: Path, preflight: str | None = None) -> dict:
+    config = {
+        "radio_type": "pymc_usb",
+        "pymc_usb": {
+            "port": str(device_path),
+            "baudrate": 921600,
+        },
+    }
+    if preflight is not None:
+        config["pymc_usb_preflight"] = preflight
+    return config
+
+
+def run_preflight_action(
+    tmp_path: Path,
+    config: dict,
+    serial_factory=SilentFakeSerial,
+) -> tuple[int, str, list[SilentFakeSerial]]:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("ignored: true\n", encoding="utf-8")
+
+    code = extract_preflight_action()
+    code = code.replace(
+        'pathlib.Path("/config/pymc-repeater/config.yaml")',
+        f"pathlib.Path({str(config_path)!r})",
+    )
+
+    serial_instances: list[SilentFakeSerial] = []
+
+    def create_serial():
+        instance = serial_factory()
+        serial_instances.append(instance)
+        return instance
+
+    previous_yaml = sys.modules.get("yaml")
+    previous_serial = sys.modules.get("serial")
+    previous_time = sys.modules.get("time")
+    original_is_char_device = Path.is_char_device
+
+    device_path = Path(config.get("pymc_usb", {}).get("port", tmp_path / "ttyACM0"))
+    device_path.parent.mkdir(parents=True, exist_ok=True)
+    device_path.touch(exist_ok=True)
+
+    def fake_is_char_device(self):
+        if str(self) == str(device_path):
+            return True
+        return original_is_char_device(self)
+
+    sys.modules["yaml"] = types.SimpleNamespace(safe_load=lambda _handle: config)
+    sys.modules["serial"] = types.SimpleNamespace(Serial=create_serial)
+    sys.modules["time"] = FastFakeTime()
+    Path.is_char_device = fake_is_char_device
+
+    output = io.StringIO()
+    exit_code = 0
+    try:
+        with contextlib.redirect_stdout(output):
+            try:
+                exec(code, {})
+            except SystemExit as exc:
+                exit_code = exc.code if isinstance(exc.code, int) else 1
+    finally:
+        Path.is_char_device = original_is_char_device
+        if previous_yaml is None:
+            sys.modules.pop("yaml", None)
+        else:
+            sys.modules["yaml"] = previous_yaml
+        if previous_serial is None:
+            sys.modules.pop("serial", None)
+        else:
+            sys.modules["serial"] = previous_serial
+        if previous_time is None:
+            sys.modules.pop("time", None)
+        else:
+            sys.modules["time"] = previous_time
+
+    return exit_code, output.getvalue(), serial_instances
+
+
 def simple_yaml_dump(value, indent=0):
     lines = []
     prefix = " " * indent
@@ -251,6 +375,101 @@ def test_radio_preflight_covers_bad_runtime_backends():
     ]
     for diagnostic in expected_diagnostics:
         assert diagnostic in startup_text
+
+
+def test_pymc_usb_preflight_warn_mode_continues_when_serial_returns_zero_bytes(tmp_path):
+    device_path = tmp_path / "ttyACM0"
+    config = pymc_usb_runtime_config(device_path, preflight="warn")
+
+    exit_code, output, serial_instances = run_preflight_action(tmp_path, config)
+
+    assert exit_code == 0
+    assert "pymc_usb selected: radio_type=pymc_usb" in output
+    assert f"port={device_path}" in output
+    assert "baudrate=921600" in output
+    assert "preflight=warn" in output
+    assert "DTR=False RTS=False" in output
+    assert "pymc_usb preflight TX GET_VERSION: aa 70 00 00 94 14 (6 bytes)" in output
+    assert "pymc_usb preflight TX PING: aa ff 00 00 ff 03 (6 bytes)" in output
+    assert "bytes_read=0 non_sync_bytes=0" in output
+    assert "pymc_usb preflight warning:" in output
+    assert "Continuing startup because pymc_usb_preflight=warn" in output
+    assert "ok" in output.splitlines()
+    assert len(serial_instances) == 1
+    assert serial_instances[0].opened is True
+    assert serial_instances[0].closed is True
+    assert serial_instances[0].reset_input_buffer_called is True
+    assert serial_instances[0].writes == [
+        bytes.fromhex("aa 70 00 00 94 14"),
+        bytes.fromhex("aa ff 00 00 ff 03"),
+    ]
+    assert serial_instances[0].dtr is False
+    assert serial_instances[0].rts is False
+
+
+def test_pymc_usb_preflight_fatal_mode_exits_when_serial_returns_zero_bytes(tmp_path):
+    device_path = tmp_path / "ttyACM0"
+    config = pymc_usb_runtime_config(device_path, preflight="fatal")
+
+    exit_code, output, serial_instances = run_preflight_action(tmp_path, config)
+
+    assert exit_code == 1
+    assert "pymc_usb preflight TX GET_VERSION: aa 70 00 00 94 14 (6 bytes)" in output
+    assert "pymc_usb preflight TX PING: aa ff 00 00 ff 03 (6 bytes)" in output
+    assert "Configured radio_type=pymc_usb opened the serial device" in output
+    assert "no valid pymc-usb GET_VERSION or PING response was decoded" in output
+    assert "ok" not in output.splitlines()
+    assert len(serial_instances) == 1
+    assert serial_instances[0].closed is True
+
+
+def test_pymc_usb_preflight_off_mode_skips_wrapper_protocol_probe(tmp_path):
+    device_path = tmp_path / "ttyACM0"
+    config = pymc_usb_runtime_config(device_path, preflight="off")
+    serial_open_attempts = []
+
+    def fail_if_serial_opens():
+        serial_open_attempts.append(True)
+        raise AssertionError("off mode must not open serial for wrapper protocol preflight")
+
+    exit_code, output, serial_instances = run_preflight_action(tmp_path, config, fail_if_serial_opens)
+
+    assert exit_code == 0
+    assert "preflight=off" in output
+    assert "pymc_usb protocol preflight disabled by pymc_usb_preflight=off" in output
+    assert "pymc_usb opening serial for protocol preflight" not in output
+    assert "pymc_usb preflight TX GET_VERSION" not in output
+    assert serial_open_attempts == []
+    assert serial_instances == []
+    assert "ok" in output.splitlines()
+
+
+def test_existing_pymc_usb_config_defaults_to_warning_preflight(tmp_path):
+    device_path = tmp_path / "ttyACM0"
+    config = pymc_usb_runtime_config(device_path)
+
+    exit_code, output, serial_instances = run_preflight_action(tmp_path, config)
+
+    assert exit_code == 0
+    assert "preflight=warn" in output
+    assert "Continuing startup because pymc_usb_preflight=warn" in output
+    assert len(serial_instances) == 1
+    assert serial_instances[0].closed is True
+
+
+def test_upstream_launch_path_remains_after_warning_preflight_failure(tmp_path):
+    device_path = tmp_path / "ttyACM0"
+    config = pymc_usb_runtime_config(device_path, preflight="warn")
+
+    exit_code, output, _serial_instances = run_preflight_action(tmp_path, config)
+    run_script = RUN_SCRIPT.read_text(encoding="utf-8")
+
+    assert exit_code == 0
+    assert "pymc_usb preflight warning:" in output
+    assert "ok" in output.splitlines()
+    assert 'CONFIG_PATH="/config/pymc-repeater/config.yaml"' in run_script
+    assert 'export PYMC_REPEATER_CONFIG="${CONFIG_PATH}"' in run_script
+    assert '"${PYTHON_BIN}" -m repeater.main --config "${CONFIG_PATH}"' in run_script
 
 
 def test_ci_safe_contract_config_does_not_use_sx1262_default():

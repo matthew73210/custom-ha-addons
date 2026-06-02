@@ -66,6 +66,16 @@ def test_readme_points_users_to_config_file_for_pymc_usb_transport():
     assert "Do not put `host`, `ip`, `tcp`, `socket`, `url`, or serial-over-TCP keys under `pymc_usb`" in readme
 
 
+def test_pymc_usb_docs_describe_warning_default_preflight():
+    for content in (read(PYMC_USB_DOC), read(README)):
+        assert "pymc_usb_preflight: warn" in content
+        assert "`warn`" in content
+        assert "`fatal`" in content
+        assert "`off`" in content
+        assert "diagnostic" in content
+        assert "no response" in content
+
+
 def test_home_assistant_config_does_not_add_pymc_usb_transport_options():
     config = read(CONFIG_YAML)
     assert "\noptions:" not in config

@@ -385,6 +385,16 @@ def require_serial_device(path_value, label):
         sys.exit(1)
     return path
 
+def require_pymc_usb_preflight_mode(value):
+    mode = str(value if value is not None else "warn").lower().strip()
+    if mode not in {"warn", "fatal", "off"}:
+        print(
+            f"Configured radio_type=pymc_usb has invalid pymc_usb_preflight={value!r}. "
+            "Supported values: warn, fatal, off."
+        )
+        sys.exit(1)
+    return mode
+
 def crc16_ccitt(data):
     crc = 0xFFFF
     for byte in data:
@@ -435,14 +445,39 @@ def read_pymc_frame(ser, timeout, expect_cmd=None):
         return cmd, payload, bytes_read, non_sync
     return None, b"", bytes_read, non_sync
 
-def probe_pymc_usb_protocol(path, baudrate):
-    print(f"pymc_usb selected: port={path} baudrate={baudrate}")
+def handle_pymc_usb_preflight_failure(mode, message):
+    if mode == "fatal":
+        print(message)
+        sys.exit(1)
+
+    print(
+        f"pymc_usb preflight warning: {message} "
+        "Continuing startup because pymc_usb_preflight=warn. "
+        "Set pymc_usb_preflight=fatal for strict diagnostics or pymc_usb_preflight=off to skip this wrapper probe."
+    )
+
+def probe_pymc_usb_protocol(path, baudrate, mode):
+    print(
+        f"pymc_usb selected: radio_type=pymc_usb port={path} baudrate={baudrate} "
+        f"preflight={mode} DTR=False RTS=False"
+    )
+    if mode == "off":
+        print(
+            "pymc_usb protocol preflight disabled by pymc_usb_preflight=off; "
+            "upstream startup will continue without wrapper protocol probe."
+        )
+        return
+
     try:
         import serial
     except Exception as exc:
-        print(f"Configured radio_type=pymc_usb cannot run protocol preflight because pyserial is unavailable: {exc}.")
-        sys.exit(1)
+        handle_pymc_usb_preflight_failure(
+            mode,
+            f"Configured radio_type=pymc_usb cannot run protocol preflight because pyserial is unavailable: {exc}.",
+        )
+        return
 
+    ser = None
     try:
         ser = serial.Serial()
         ser.port = path
@@ -456,8 +491,16 @@ def probe_pymc_usb_protocol(path, baudrate):
         print("pymc_usb opening serial for protocol preflight (DTR=False RTS=False)")
         ser.open()
     except Exception as exc:
-        print(f"Configured radio_type=pymc_usb could not open {path} at {baudrate} baud: {exc}.")
-        sys.exit(1)
+        handle_pymc_usb_preflight_failure(
+            mode,
+            f"Configured radio_type=pymc_usb could not open {path} at {baudrate} baud: {exc}.",
+        )
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+        return
 
     try:
         time.sleep(0.5)
@@ -468,9 +511,8 @@ def probe_pymc_usb_protocol(path, baudrate):
             print(f"pymc_usb passive/startup bytes before probe: {data_hex}")
         ser.reset_input_buffer()
 
-        # Harmless protocol probe. The real backend first startup command
-        # remains SET_CONFIG; this only validates that the device speaks the
-        # pymc-usb frame protocol before the add-on reports healthy.
+        # Diagnostic protocol probe. The real backend first startup command
+        # remains SET_CONFIG; warn mode must not decide device usability for upstream.
         for tx_cmd, rx_cmd, name in ((0x70, 0x71, "GET_VERSION"), (0xFF, 0xFF, "PING")):
             frame = build_pymc_frame(tx_cmd)
             frame_hex = frame.hex(" ")
@@ -494,16 +536,27 @@ def probe_pymc_usb_protocol(path, baudrate):
                 f"bytes_read={bytes_read} non_sync_bytes={non_sync}"
             )
 
-        print(
+        handle_pymc_usb_preflight_failure(
+            mode,
             "Configured radio_type=pymc_usb opened the serial device, but no valid pymc-usb "
             "GET_VERSION or PING response was decoded. The device may be silent, reset-looping, "
             "running incompatible firmware, using the wrong baudrate/line settings, or not exposed "
-            "correctly to the add-on container."
+            "correctly to the add-on container. Some working pymc-usb firmware may not answer "
+            "wrapper GET_VERSION/PING probes."
         )
-        sys.exit(1)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        handle_pymc_usb_preflight_failure(
+            mode,
+            f"Configured radio_type=pymc_usb protocol preflight failed for {path} at {baudrate} baud: {exc}.",
+        )
     finally:
-        ser.close()
-        print("pymc_usb preflight serial closed")
+        try:
+            ser.close()
+            print("pymc_usb preflight serial closed")
+        except Exception as exc:
+            print(f"pymc_usb preflight serial close failed: {exc}")
 
 def require_tcp_endpoint(section):
     host = str(section.get("host", "")).strip()
@@ -555,9 +608,10 @@ if radio_type == "pymc_tcp":
 
 if radio_type == "pymc_usb":
     pymc_usb_config = require_mapping("pymc_usb")
+    pymc_usb_preflight = require_pymc_usb_preflight_mode(config.get("pymc_usb_preflight", "warn"))
     pymc_usb_port = require_serial_device(pymc_usb_config.get("port"), "pymc_usb.port")
     pymc_usb_baudrate = require_int(pymc_usb_config.get("baudrate", 921600), "pymc_usb.baudrate", 1)
-    probe_pymc_usb_protocol(pymc_usb_port, pymc_usb_baudrate)
+    probe_pymc_usb_protocol(pymc_usb_port, pymc_usb_baudrate, pymc_usb_preflight)
 
 if radio_type in {"kiss", "kiss-modem"}:
     kiss_config = require_mapping("kiss")

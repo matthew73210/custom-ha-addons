@@ -177,6 +177,8 @@ The wrapper does not translate Home Assistant options into pyMC Repeater config 
 
 Before starting the backend, the wrapper validates the selected `radio_type`. Unsupported radio types, missing or invalid `pymc_tcp` host/port values, unreachable TCP modem endpoints, missing KISS or `pymc_usb` serial devices, non-character serial paths, and serial permission failures stop startup with a clear log message. This prevents upstream TCP deferred-connect mode from making an unusable radio backend look healthy.
 
+For `radio_type: pymc_usb`, the wrapper also runs a protocol preflight by default. This preflight is diagnostic only unless strict mode is enabled: it logs the selected port, baudrate, DTR/RTS settings, GET_VERSION/PING frames sent, and read counts, then continues startup if the device does not answer. Some working pymc-usb firmware may not answer wrapper GET_VERSION/PING probes, so no response does not automatically mean upstream pyMC Repeater cannot use the device.
+
 ## AppArmor And Permissions
 
 The app uses Home Assistant Supervisor's default AppArmor handling with `apparmor: true`. The declared `addon_config` map grants the container read/write access to `/config`, which is where pyMC stores its database, RRD, identity, config, logs/cache, and related runtime files. Serial, USB, and GPIO access remain declared in `config.yaml` for KISS and radio devices.
@@ -216,6 +218,14 @@ pymc_usb:
 ```
 
 Prefer `/dev/serial/by-id/...` because it is stable across reboots. `/dev/ttyACM*`, `/dev/ttyUSB*`, and `/dev/ttyS*` may work but can change. The wrapper already declares `usb: true` and `uart: true`; the serial path is configured only in `/config/pymc-repeater/config.yaml`.
+
+Optional wrapper preflight modes:
+
+```yaml
+pymc_usb_preflight: warn
+```
+
+Valid values are `warn`, `fatal`, and `off`. `warn` is the default and continues startup after a wrapper GET_VERSION/PING no-response diagnostic. `fatal` fails startup on no valid wrapper response for strict diagnostics. `off` skips the wrapper protocol probe entirely. The preflight closes the serial port before the upstream backend starts, and upstream still receives `/config/pymc-repeater/config.yaml`.
 
 ### TCP/IP Example
 

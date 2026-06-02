@@ -104,3 +104,19 @@ python -m repeater.main --config /config/pymc-repeater/config.yaml
 `PYMC_REPEATER_CONFIG` also points at `/config/pymc-repeater/config.yaml`. `/etc/pymc_repeater` is still a wrapper symlink to the persisted `/config/pymc-repeater` directory for upstream compatibility.
 
 When `radio_type` is `pymc_usb`, startup requires the configured `pymc_usb.port` to exist, be a character device, and be readable/writable inside the add-on container. When `radio_type` is `pymc_tcp`, startup requires the configured host and port to resolve and accept a TCP connection.
+
+## Wrapper protocol preflight
+
+For local `radio_type: pymc_usb`, the wrapper runs a diagnostic protocol preflight before upstream starts. It logs the selected radio type, port, baudrate, DTR/RTS settings, GET_VERSION/PING frames sent, and read counts. The default is warning-only:
+
+```yaml
+pymc_usb_preflight: warn
+```
+
+Valid values:
+
+- `warn`: run the wrapper preflight, log failures, close the serial port, and continue startup.
+- `fatal`: run the wrapper preflight and fail startup if no valid GET_VERSION/PING response is decoded.
+- `off`: skip the wrapper protocol preflight.
+
+Some working pymc-usb firmware may not answer wrapper GET_VERSION/PING probes even though upstream pyMC Repeater can use the device. For that reason, no response from the wrapper preflight is not fatal unless `pymc_usb_preflight: fatal` is set. The wrapper does not rewrite the persisted config, and upstream still receives `/config/pymc-repeater/config.yaml` through `--config`.

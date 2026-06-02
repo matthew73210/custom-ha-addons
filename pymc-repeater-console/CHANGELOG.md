@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- Fixed a wrapper regression introduced by the `pymc_usb` protocol preflight: no-response GET_VERSION/PING diagnostics now default to warning-only instead of stopping startup before upstream pyMC Repeater can run.
+- Added optional `pymc_usb_preflight` modes: `warn` (default), `fatal`, and `off`.
+- Kept strict validation for missing, non-character, or inaccessible serial devices while making the wrapper protocol probe diagnostic by default.
+- Added regression coverage for warning, fatal, off, existing-config default behavior, and the unchanged upstream launch path.
+
 ## 0.3.2
 
 - Added the read-only **Check pyMC Upstream Mergeability** scheduled/manual workflow for pyMC Repeater, pyMC Core, and pyMC Console dist.
