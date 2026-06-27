@@ -2,22 +2,25 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.3.3
+ARG BUILD_VERSION=0.3.4
 ARG BUILD_ARCH=amd64
 ARG BUILD_DATE=
-ARG PYMC_REPEATER_REPO=https://github.com/pyMC-dev/pyMC_Repeater.git
-ARG PYMC_REPEATER_REF=e17d1137ab2d2d5b86d03c99523272289b7688aa
+ARG PYMC_REPEATER_REPO=https://github.com/openhop-dev/openhop_repeater.git
+ARG PYMC_REPEATER_REF=60357f580876ceab5b3808a7ed00f81ae235c003
 ARG PYMC_CORE_REF=330e32d57b9321afd63c38e634fa076a5049afee
 ARG PYMC_CONSOLE_REF=2d961cef1ae1a355eb06e34fba99788d9ffca44a
-ARG PYMC_CORE_REPO=https://github.com/pyMC-dev/pyMC_core.git
+ARG PYMC_CORE_REPO=https://github.com/openhop-dev/openhop_core.git
 ARG PYMC_CONSOLE_REPO=https://github.com/dmduran12/pymc_console-dist.git
+ARG OPENHOP_CORE_VERSION=1.1.1
 
 ENV INSTALL_DIR=/opt/pymc_repeater \
     CONSOLE_WEB_DIR=/opt/pymc_console/web/html \
     ORIGINAL_WEB_DIR=/opt/pymc_repeater_original_web \
+    OPENHOP_REPEATER_CONFIG=/config/pymc-repeater/config.yaml \
     PYMC_REPEATER_CONFIG=/config/pymc-repeater/config.yaml \
     PYTHONUNBUFFERED=1 \
-    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYMC_REPEATER=1.0.5 \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_OPENHOP_REPEATER=1.1.2 \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYMC_REPEATER=1.1.2 \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"
 
@@ -33,6 +36,7 @@ LABEL \
   org.opencontainers.image.pymc_repeater.ref="${PYMC_REPEATER_REF}" \
   org.opencontainers.image.pymc_core.repo="${PYMC_CORE_REPO}" \
   org.opencontainers.image.pymc_core.ref="${PYMC_CORE_REF}" \
+  org.opencontainers.image.openhop_core.version="${OPENHOP_CORE_VERSION}" \
   org.opencontainers.image.pymc_console.repo="${PYMC_CONSOLE_REPO}" \
   org.opencontainers.image.pymc_console.ref="${PYMC_CONSOLE_REF}" \
   org.opencontainers.image.pymc_upstream_metadata="/usr/share/pymc-repeater-console/upstream-build-info.json" \
@@ -40,8 +44,9 @@ LABEL \
 
 RUN echo "Building pyMC Repeater + Console add-on wrapper version: ${BUILD_VERSION}" \
   && echo "Build architecture: ${BUILD_ARCH}" \
-  && echo "pyMC_Repeater upstream: ${PYMC_REPEATER_REPO} ref=${PYMC_REPEATER_REF}" \
-  && echo "pyMC_core upstream: ${PYMC_CORE_REPO} ref=${PYMC_CORE_REF}" \
+  && echo "OpenHop Repeater upstream: ${PYMC_REPEATER_REPO} ref=${PYMC_REPEATER_REF}" \
+  && echo "OpenHop Core package: openhop_core[hardware]==${OPENHOP_CORE_VERSION}" \
+  && echo "Reviewed legacy pyMC_core source: ${PYMC_CORE_REPO} ref=${PYMC_CORE_REF}" \
   && echo "pyMC Console dist upstream: ${PYMC_CONSOLE_REPO} ref=${PYMC_CONSOLE_REF}" \
   && echo "Wrapper policy: no manage.sh is run; upstream source/dist files are not patched." \
   && echo "Installing wrapper runtime/build packages for pyMC Repeater + Console" \
@@ -71,18 +76,18 @@ RUN echo "Building pyMC Repeater + Console add-on wrapper version: ${BUILD_VERSI
 
 WORKDIR ${INSTALL_DIR}
 
-RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
-  && echo "Requested pyMC_Repeater ref: ${PYMC_REPEATER_REF}" \
+RUN echo "Cloning OpenHop Repeater repo: ${PYMC_REPEATER_REPO}" \
+  && echo "Requested OpenHop Repeater ref: ${PYMC_REPEATER_REF}" \
   && git init . \
   && git remote add origin "${PYMC_REPEATER_REPO}" \
   && if ! git fetch --depth 1 origin "${PYMC_REPEATER_REF}"; then \
-       echo "ERROR: unable to resolve pyMC_Repeater ref ${PYMC_REPEATER_REF} from ${PYMC_REPEATER_REPO}"; \
+       echo "ERROR: unable to resolve OpenHop Repeater ref ${PYMC_REPEATER_REF} from ${PYMC_REPEATER_REPO}"; \
        exit 1; \
      fi \
   && git checkout --detach FETCH_HEAD \
   && git rev-parse HEAD > /tmp/pymc_repeater_resolved_sha \
-  && echo "Resolved pyMC_Repeater commit SHA: $(cat /tmp/pymc_repeater_resolved_sha)" \
-  && echo "pyMC_Repeater checkout diagnostics:" \
+  && echo "Resolved OpenHop Repeater commit SHA: $(cat /tmp/pymc_repeater_resolved_sha)" \
+  && echo "OpenHop Repeater checkout diagnostics:" \
   && git remote -v \
   && git branch -a \
   && git show --no-patch --oneline HEAD \
@@ -93,10 +98,10 @@ RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
   && (grep -n "pymc_tcp" repeater/config.py || true) \
   && (grep -n "pymc_usb" repeater/config.py || true) \
   && (tail -40 repeater/config.py || true) \
-  && (cat pyproject.toml | grep -n "pymc_core" || true) \
-  && echo "Verifying checked-out pyMC_Repeater source contains pymc_tcp and pymc_usb runtime support" \
-  && if ! grep -q 'radio_type == "pymc_tcp"' repeater/config.py; then \
-       echo "ERROR: checked-out pyMC_Repeater does not support radio_type=pymc_tcp"; \
+  && (cat pyproject.toml | grep -En "openhop_core|pymc_core|openhop-repeater|pymc-repeater" || true) \
+  && echo "Verifying checked-out OpenHop Repeater source contains pymc_tcp and pymc_usb runtime support" \
+  && if ! grep -Eq 'radio_type.*pymc_tcp' repeater/config.py; then \
+       echo "ERROR: checked-out OpenHop Repeater does not support radio_type=pymc_tcp"; \
        echo "Remote:"; \
        git remote -v; \
        echo "HEAD:"; \
@@ -109,8 +114,8 @@ RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
        tail -80 repeater/config.py || true; \
        exit 1; \
      fi \
-  && if ! grep -q 'radio_type == "pymc_usb"' repeater/config.py; then \
-       echo "ERROR: checked-out pyMC_Repeater does not support radio_type=pymc_usb"; \
+  && if ! grep -Eq 'radio_type.*pymc_usb' repeater/config.py; then \
+       echo "ERROR: checked-out OpenHop Repeater does not support radio_type=pymc_usb"; \
        echo "Remote:"; \
        git remote -v; \
        echo "HEAD:"; \
@@ -121,29 +126,41 @@ RUN echo "Cloning pyMC_Repeater repo: ${PYMC_REPEATER_REPO}" \
        grep -n "radio_type" repeater/config.py || true; \
        grep -n "pymc" repeater/config.py || true; \
        tail -80 repeater/config.py || true; \
+       exit 1; \
+     fi \
+  && echo "Verifying renamed upstream imports OpenHop Core runtime modules" \
+  && if ! grep -q 'openhop_core.hardware.tcp_radio' repeater/config.py; then \
+       echo "ERROR: checked-out OpenHop Repeater does not import openhop_core.hardware.tcp_radio"; \
+       grep -n "tcp_radio" repeater/config.py || true; \
+       exit 1; \
+     fi \
+  && if ! grep -q 'openhop_core.hardware.usb_radio' repeater/config.py; then \
+       echo "ERROR: checked-out OpenHop Repeater does not import openhop_core.hardware.usb_radio"; \
+       grep -n "usb_radio" repeater/config.py || true; \
        exit 1; \
      fi \
   && echo "Wrapper policy: not running upstream manage.sh or other install scripts; installing Python package directly."
 
-RUN echo "Cloning pyMC_core repo: ${PYMC_CORE_REPO}" \
-  && echo "Requested pyMC_core ref: ${PYMC_CORE_REF}" \
+RUN echo "Cloning reviewed core source repo: ${PYMC_CORE_REPO}" \
+  && echo "Requested reviewed core ref: ${PYMC_CORE_REF}" \
   && mkdir -p /tmp/pymc_core-src \
   && git -C /tmp/pymc_core-src init . \
   && git -C /tmp/pymc_core-src remote add origin "${PYMC_CORE_REPO}" \
   && if ! git -C /tmp/pymc_core-src fetch --depth 1 origin "${PYMC_CORE_REF}"; then \
-       echo "ERROR: unable to resolve pyMC_core ref ${PYMC_CORE_REF} from ${PYMC_CORE_REPO}"; \
+       echo "ERROR: unable to resolve reviewed core ref ${PYMC_CORE_REF} from ${PYMC_CORE_REPO}"; \
        exit 1; \
      fi \
   && git -C /tmp/pymc_core-src checkout --detach FETCH_HEAD \
   && git -C /tmp/pymc_core-src rev-parse HEAD > /tmp/pymc_core_resolved_sha \
-  && echo "Resolved pyMC_core commit SHA: $(cat /tmp/pymc_core_resolved_sha)" \
+  && echo "Resolved reviewed core commit SHA: $(cat /tmp/pymc_core_resolved_sha)" \
   && git -C /tmp/pymc_core-src show --no-patch --oneline HEAD
 
 RUN python3 -m venv --system-site-packages /opt/venv \
   && pip install --no-cache-dir --upgrade pip setuptools wheel \
-  && pip install --no-cache-dir . \
-  && pip install --no-cache-dir --force-reinstall "/tmp/pymc_core-src[hardware]" \
-  && python3 -m pip show pymc-repeater \
+  && pip install --no-cache-dir "openhop_core[hardware]==${OPENHOP_CORE_VERSION}" . \
+  && pip install --no-cache-dir "/tmp/pymc_core-src[hardware]" \
+  && python3 -m pip show openhop-repeater \
+  && python3 -m pip show openhop-core \
   && python3 -m pip show pymc-core \
   && mkdir -p /usr/share/licenses/pymc-repeater \
   && cp "${INSTALL_DIR}/LICENSE" /usr/share/licenses/pymc-repeater/LICENSE
@@ -154,9 +171,9 @@ import inspect
 import repeater.config as config
 
 src = inspect.getsource(config)
-if 'radio_type == "pymc_tcp"' not in src:
+if 'pymc_tcp' not in src or 'openhop_core.hardware.tcp_radio' not in src:
     raise SystemExit("ERROR: installed repeater.config does not contain pymc_tcp radio_type support")
-if 'radio_type == "pymc_usb"' not in src:
+if 'pymc_usb' not in src or 'openhop_core.hardware.usb_radio' not in src:
     raise SystemExit("ERROR: installed repeater.config does not contain pymc_usb radio_type support")
 
 print("OK: installed repeater.config supports radio_type=pymc_tcp and radio_type=pymc_usb")
@@ -166,15 +183,17 @@ PY
 RUN cd / \
   && python3 - <<'PY'
 try:
-    from pymc_core.hardware.tcp_radio import TCPLoRaRadio
+    from openhop_core.hardware.tcp_radio import TCPLoRaRadio
+    from openhop_core.hardware.usb_radio import USBLoRaRadio
 except Exception as exc:
-    raise SystemExit(f"ERROR: installed pyMC_core lacks TCPLoRaRadio: {exc}") from exc
+    raise SystemExit(f"ERROR: installed openhop_core lacks modem radio support: {exc}") from exc
 
-print("OK: installed pyMC_core has TCPLoRaRadio")
+print("OK: installed openhop_core has TCPLoRaRadio and USBLoRaRadio")
 print("TCPLoRaRadio:", TCPLoRaRadio)
+print("USBLoRaRadio:", USBLoRaRadio)
 PY
 
-RUN echo "Copying original pyMC_Repeater web assets without patching upstream files" \
+RUN echo "Copying original OpenHop Repeater web assets without patching upstream files" \
   && mkdir -p "${ORIGINAL_WEB_DIR}" \
   && cp -a "${INSTALL_DIR}/repeater/web/html" "${ORIGINAL_WEB_DIR}/html" \
   && ln -sfn "${ORIGINAL_WEB_DIR}/html" "${ORIGINAL_WEB_DIR}/repeater" \
@@ -205,6 +224,7 @@ RUN mkdir -p /usr/share/pymc-repeater-console \
      PYMC_REPEATER_REPO="${PYMC_REPEATER_REPO}" PYMC_REPEATER_REF="${PYMC_REPEATER_REF}" \
      PYMC_CORE_REPO="${PYMC_CORE_REPO}" PYMC_CORE_REF="${PYMC_CORE_REF}" \
      PYMC_CONSOLE_REPO="${PYMC_CONSOLE_REPO}" PYMC_CONSOLE_REF="${PYMC_CONSOLE_REF}" \
+     OPENHOP_CORE_VERSION="${OPENHOP_CORE_VERSION}" \
      python3 - <<'PY'
 import datetime
 import json
@@ -234,6 +254,8 @@ metadata = {
         "repository": os.environ["PYMC_CORE_REPO"],
         "requested_ref": os.environ["PYMC_CORE_REF"],
         "resolved_sha": read_text("/tmp/pymc_core_resolved_sha"),
+        "runtime_package": "openhop_core",
+        "runtime_package_version": os.environ.get("OPENHOP_CORE_VERSION", ""),
     },
     "pymc_console_dist": {
         "repository": os.environ["PYMC_CONSOLE_REPO"],

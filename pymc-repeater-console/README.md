@@ -1,16 +1,17 @@
 # pyMC Repeater + Console Home Assistant App
 
-This app packages the working pyMC Repeater daemon and layers the pyMC Console dashboard on top of it for Home Assistant Supervisor.
+This app packages the working OpenHop Repeater daemon, formerly pyMC Repeater, and layers the pyMC Console dashboard on top of it for Home Assistant Supervisor.
 
-pyMC Console is a frontend/dashboard layer. It uses the same pyMC_Repeater REST API and WebSocket endpoints exposed by the backend daemon in this app. It is not a separate radio daemon.
+pyMC Console is a frontend/dashboard layer. It uses the same OpenHop Repeater REST API and WebSocket endpoints exposed by the backend daemon in this app. It is not a separate radio daemon.
 
-- pyMC Repeater: https://github.com/pyMC-dev/pyMC_Repeater
+- OpenHop Repeater: https://github.com/openhop-dev/openhop_repeater
 - pyMC Console distribution: https://github.com/dmduran12/pymc_console-dist
 
 Current upstream build refs:
 
-- pyMC_Repeater repo/ref: `https://github.com/pyMC-dev/pyMC_Repeater.git` / `e17d1137ab2d2d5b86d03c99523272289b7688aa`
-- pyMC_core repo/ref: `https://github.com/pyMC-dev/pyMC_core.git` / `330e32d57b9321afd63c38e634fa076a5049afee`
+- OpenHop Repeater repo/ref: `https://github.com/openhop-dev/openhop_repeater.git` / `60357f580876ceab5b3808a7ed00f81ae235c003`
+- OpenHop Core repo/ref: `https://github.com/openhop-dev/openhop_core.git` / `330e32d57b9321afd63c38e634fa076a5049afee`
+- OpenHop Core runtime package: `openhop_core==1.1.1`
 - pyMC Console dist repo/ref: `https://github.com/dmduran12/pymc_console-dist.git` / `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 
 The Docker build logs the requested ref and resolved commit SHA for each upstream ref, writes `/usr/share/pymc-repeater-console/upstream-build-info.json`, and fails clearly if a requested ref cannot be resolved. The refs remain configurable with `PYMC_REPEATER_REF`, `PYMC_CORE_REF`, and `PYMC_CONSOLE_REF` build arguments for dev/testing.
@@ -57,11 +58,11 @@ The original pyMC Repeater UI is still available:
 /repeater/
 ```
 
-Both UIs talk to the same pyMC_Repeater backend API and WebSocket endpoints. A small wrapper-owned navigation control is injected into both pages so you can move between **pyMC Console** and **pyMC Repeater**.
+Both UIs talk to the same OpenHop Repeater backend API and WebSocket endpoints. A small wrapper-owned navigation control is injected into both pages so you can move between **pyMC Console** and **Repeater**.
 
 ## Companion Frame Server
 
-pyMC_Repeater listens inside the app container on TCP port `5000` for companion frame clients. The app exposes container port `5000/tcp` as an optional, configurable Home Assistant app port. It does not bind host port `5000` by default, so the app can install and start even when something else already uses host port `5000`.
+OpenHop Repeater listens inside the app container on TCP port `5000` for companion frame clients. The app exposes container port `5000/tcp` as an optional, configurable Home Assistant app port. It does not bind host port `5000` by default, so the app can install and start even when something else already uses host port `5000`.
 
 To allow remote companion clients, open the app **Network** settings and enable or set a host port for `5000/tcp`. Remote clients should connect to:
 
@@ -79,13 +80,13 @@ Use your Home Assistant host IP and the configured host port. Do not use Docker-
 
 ## Ingress
 
-Ingress is enabled. Home Assistant opens the app through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream pyMC_Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
+Ingress is enabled. Home Assistant opens the app through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream OpenHop Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
 
 The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. Contacts map basemap/style requests are routed through a wrapper-owned same-origin proxy so MapLibre tile, sprite, and glyph URLs keep working under Home Assistant ingress without hardcoding an ingress URL. The proxy also normalizes duplicate `/api/api/...` requests emitted by some original Repeater UI panels so settings such as TX Delays can save without patching upstream assets. The app does not expose host ports by default.
 
 Console packet-cache and graph routes are proxied to the upstream backend unchanged. The wrapper no longer serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, or `/api/analytics/*` from local SQLite data. If upstream does not provide an analytics route, the wrapper lets upstream fail natively instead of synthesizing analytics.
 
-Both upstream frontends expect to run at `/`. The app handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream pyMC_Repeater Python code is not patched.
+Both upstream frontends expect to run at `/`. The app handles Home Assistant ingress prefixes and the `/repeater/` original UI path in wrapper-owned Nginx config plus small wrapper-owned JavaScript helpers. Upstream OpenHop Repeater Python code is not patched.
 
 ### Proxied Routes
 
@@ -97,9 +98,9 @@ The bundled Console frontend route audit covers:
 - Preserved original Repeater UI: `/repeater/` and its assets
 - Wrapper-owned Carto ingress adaptation: `/_pymc_map_proxy/basemaps/*` and `/_pymc_map_proxy/tiles/*`
 
-The default Nginx location forwards Console REST, auth, WebSocket, static, and SPA requests to pyMC Repeater unchanged. Wrapper exceptions are limited to ingress URL adaptation, `/api/api/*` path normalization for the original Repeater UI, the preserved `/repeater/` UI mount, and the Carto same-origin proxy.
+The default Nginx location forwards Console REST, auth, WebSocket, static, and SPA requests to OpenHop Repeater unchanged. Wrapper exceptions are limited to ingress URL adaptation, `/api/api/*` path normalization for the original Repeater UI, the preserved `/repeater/` UI mount, and the Carto same-origin proxy.
 
-Current Console dist includes `/api/analytics/*` calls that current pyMC Repeater `main` does not provide. Those calls are still forwarded upstream. A native upstream `404` is expected until upstream Console and Repeater converge; the wrapper does not recreate analytics locally.
+Current Console dist includes `/api/analytics/*` calls that current OpenHop Repeater `main` does not provide. Those calls are still forwarded upstream. A native upstream `404` is expected until upstream Console and Repeater converge; the wrapper does not recreate analytics locally.
 
 ### LBT Graph Diagnostics
 
@@ -115,7 +116,7 @@ Chrome and Chromium-based browsers are recommended for Console graph pages throu
 
 ## Configuration And Persistence
 
-pyMC Repeater runtime settings live only in the persisted upstream config file. The Home Assistant add-on options are not used to configure pyMC Repeater runtime behavior.
+OpenHop Repeater runtime settings live only in the persisted upstream config file. The Home Assistant add-on options are not used to configure OpenHop Repeater runtime behavior.
 
 The app maps Home Assistant's app-specific config directory into the container at:
 
@@ -129,7 +130,13 @@ The wrapper keeps all pyMC-owned durable files under:
 /config/pymc-repeater
 ```
 
-The upstream daemon expects its runtime config at:
+The renamed upstream daemon expects its runtime config at:
+
+```text
+/etc/openhop_repeater/config.yaml
+```
+
+Legacy pyMC compatibility paths still resolve to the same persisted directory:
 
 ```text
 /etc/pymc_repeater/config.yaml
@@ -141,7 +148,7 @@ The persistent config used by this app lives at:
 /config/pymc-repeater/config.yaml
 ```
 
-At startup, the app links `/etc/pymc_repeater` and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream compatibility. The backend is launched with, and `PYMC_REPEATER_CONFIG` points at, the real persisted file `/config/pymc-repeater/config.yaml`. If `/config/pymc-repeater/config.yaml` already exists, the wrapper uses it unchanged. If it does not exist, the wrapper creates a default config once. Later starts do not merge, regenerate, or overwrite the file.
+At startup, the app links `/etc/openhop_repeater`, `/var/lib/openhop_repeater`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater` to `/config/pymc-repeater` for upstream and legacy compatibility. The backend is launched with, and both `OPENHOP_REPEATER_CONFIG` and `PYMC_REPEATER_CONFIG` point at, the real persisted file `/config/pymc-repeater/config.yaml`. If `/config/pymc-repeater/config.yaml` already exists, the wrapper uses it unchanged. If it does not exist, the wrapper creates a default config once. Later starts do not merge, regenerate, or overwrite the file.
 
 The default pyMC config points directly at the persistent mapped paths:
 
@@ -154,15 +161,15 @@ repeater:
 
 The same persistent directory holds `identity.key`, `repeater.db`, `metrics.rrd`, SQLite WAL files, Glass certificates, and other pyMC history/cache files. If an older install has runtime files in `/data/pymc-repeater`, the wrapper migrates them into `/config/pymc-repeater` on startup without overwriting newer persistent files or an existing persistent `config.yaml`.
 
-Edit `/config/pymc-repeater/config.yaml` to configure radio type, node name, location, logging, KISS serial settings, `pymc_usb`, `pymc_tcp`, Glass, storage, and other pyMC Repeater runtime settings. Use the Home Assistant **Network** settings only for add-on port mappings such as the companion frame server.
+Edit `/config/pymc-repeater/config.yaml` to configure radio type, node name, location, logging, KISS serial settings, `pymc_usb`, `pymc_tcp`, Glass, storage, and other OpenHop Repeater runtime settings. Use the Home Assistant **Network** settings only for add-on port mappings such as the companion frame server.
 
-The app intentionally has no Home Assistant UI options for pyMC Repeater runtime settings. Values such as node name, coordinates, country, radio type, radio frequency, KISS serial settings, `pymc_usb` serial paths, remote TCP/IP hosts and ports, `pymc_tcp`, Glass, admin password, logging, and raw config YAML belong in `/config/pymc-repeater/config.yaml`.
+The app intentionally has no Home Assistant UI options for OpenHop Repeater runtime settings. Values such as node name, coordinates, country, radio type, radio frequency, KISS serial settings, `pymc_usb` serial paths, remote TCP/IP hosts and ports, `pymc_tcp`, Glass, admin password, logging, and raw config YAML belong in `/config/pymc-repeater/config.yaml`.
 
 If Home Assistant Supervisor logs warnings about old options such as `node_name`, `radio_type`, `frequency_hz`, `pymc_tcp_host`, or `config_yaml`, those warnings are stale saved add-on options from an older version. They are not options supported by the current wrapper. Reset or re-save the add-on configuration in Home Assistant, or reinstall the add-on if needed, and keep the runtime settings in `/config/pymc-repeater/config.yaml`.
 
-Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `logging.level` in `/config/pymc-repeater/config.yaml` is set to `DEBUG` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
+Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, active config path, config mtime/checksum, selected radio endpoint, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `logging.level` in `/config/pymc-repeater/config.yaml` is set to `DEBUG` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
 
-Nginx logs worker asset requests plus failed auth/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values. A failed ingress request with an upstream address reached pyMC Repeater; a `502` or missing upstream address points to wrapper/backend reachability instead.
+Nginx logs worker asset requests plus failed auth/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values. A failed ingress request with an upstream address reached OpenHop Repeater; a `502` or missing upstream address points to wrapper/backend reachability instead.
 
 The wrapper sets:
 
@@ -171,13 +178,13 @@ web:
   web_path: /opt/pymc_console/web/html
 ```
 
-That makes pyMC_Repeater serve Console at `/`. The Docker build preserves the original pyMC_Repeater web files under `/opt/pymc_repeater_original_web`, and Nginx serves those files at `/repeater/`.
+That makes OpenHop Repeater serve Console at `/`. The Docker build preserves the original Repeater web files under `/opt/pymc_repeater_original_web`, and Nginx serves those files at `/repeater/`.
 
-The wrapper does not translate Home Assistant options into pyMC Repeater config keys. Keep runtime configuration in `/config/pymc-repeater/config.yaml` so upstream behavior remains visible and editable as upstream config.
+The wrapper does not translate Home Assistant options into OpenHop Repeater config keys. Keep runtime configuration in `/config/pymc-repeater/config.yaml` so upstream behavior remains visible and editable as upstream config.
 
 Before starting the backend, the wrapper validates the selected `radio_type`. Unsupported radio types, missing or invalid `pymc_tcp` host/port values, unreachable TCP modem endpoints, missing KISS or `pymc_usb` serial devices, non-character serial paths, and serial permission failures stop startup with a clear log message. This prevents upstream TCP deferred-connect mode from making an unusable radio backend look healthy.
 
-For `radio_type: pymc_usb`, the wrapper also runs a protocol preflight by default. This preflight is diagnostic only unless strict mode is enabled: it logs the selected port, baudrate, DTR/RTS settings, GET_VERSION/PING frames sent, and read counts, then continues startup if the device does not answer. Some working pymc-usb firmware may not answer wrapper GET_VERSION/PING probes, so no response does not automatically mean upstream pyMC Repeater cannot use the device.
+For `radio_type: pymc_usb`, the wrapper also runs a protocol preflight by default. This preflight is diagnostic only unless strict mode is enabled: it logs the selected port, baudrate, DTR/RTS settings, GET_VERSION/PING frames sent, and read counts, then continues startup if the device does not answer. Some working pymc-usb firmware may not answer wrapper GET_VERSION/PING probes, so no response does not automatically mean upstream OpenHop Repeater cannot use the device.
 
 ## AppArmor And Permissions
 
@@ -196,7 +203,7 @@ kiss:
 
 ## pymc_usb transport modes
 
-`pymc_usb` names the pymc-usb-compatible modem family and protocol. It does not always mean the modem is physically attached over USB. Upstream pyMC Repeater currently exposes two transport configurations for that modem family.
+`pymc_usb` names the pymc-usb-compatible modem family and protocol. It does not always mean the modem is physically attached over USB. Upstream OpenHop Repeater currently exposes two transport configurations for that modem family.
 
 | Mode | Use when | Config value | Example field |
 | --- | --- | --- | --- |
@@ -252,13 +259,13 @@ pymc_tcp:
 
 `baudrate` is not used by upstream in TCP/IP mode because there is no local serial link. Do not put `host`, `ip`, `tcp`, `socket`, `url`, or serial-over-TCP keys under `pymc_usb`; the accepted network schema is the upstream `pymc_tcp` section shown above.
 
-These values are upstream pyMC Repeater config keys. The wrapper does not translate Home Assistant option names or fill automatic radio defaults on later starts, so the radio settings in the config file must match the working modem and the rest of the mesh.
+These values are upstream OpenHop Repeater config keys. The wrapper does not translate Home Assistant option names or fill automatic radio defaults on later starts, so the radio settings in the config file must match the working modem and the rest of the mesh.
 
 ## License And Attribution
 
-pyMC Repeater and pyMC Console are MIT licensed upstream. This repository contains only the Home Assistant app wrapper files and builds the upstream projects during the Docker build.
+OpenHop Repeater and pyMC Console are MIT licensed upstream. This repository contains only the Home Assistant app wrapper files and builds the upstream projects during the Docker build.
 
 See the upstream projects for source, licenses, examples, and current hardware details:
 
-- https://github.com/pyMC-dev/pyMC_Repeater
+- https://github.com/openhop-dev/openhop_repeater
 - https://github.com/dmduran12/pymc_console-dist

@@ -9,29 +9,29 @@
   "upstreams": [
     {
       "id": "pymc_repeater",
-      "name": "pyMC Repeater",
-      "repo_url": "https://github.com/pyMC-dev/pyMC_Repeater.git",
-      "github_slug": "pyMC-dev/pyMC_Repeater",
+      "name": "OpenHop Repeater",
+      "repo_url": "https://github.com/openhop-dev/openhop_repeater.git",
+      "github_slug": "openhop-dev/openhop_repeater",
       "repo_build_arg": "PYMC_REPEATER_REPO",
       "ref_build_arg": "PYMC_REPEATER_REF",
       "release_workflow_env": "PYMC_REPEATER_DEFAULT_REF",
-      "pinned_ref": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
+      "pinned_ref": "60357f580876ceab5b3808a7ed00f81ae235c003",
       "watched_ref": "main",
       "release_critical": true,
-      "notes": "Backend daemon fetched and installed unchanged during the wrapper build."
+      "notes": "Backend daemon formerly named pyMC Repeater; fetched and installed unchanged during the wrapper build."
     },
     {
       "id": "pymc_core",
-      "name": "pyMC Core",
-      "repo_url": "https://github.com/pyMC-dev/pyMC_core.git",
-      "github_slug": "pyMC-dev/pyMC_core",
+      "name": "OpenHop Core",
+      "repo_url": "https://github.com/openhop-dev/openhop_core.git",
+      "github_slug": "openhop-dev/openhop_core",
       "repo_build_arg": "PYMC_CORE_REPO",
       "ref_build_arg": "PYMC_CORE_REF",
       "release_workflow_env": "PYMC_CORE_DEFAULT_REF",
       "pinned_ref": "330e32d57b9321afd63c38e634fa076a5049afee",
       "watched_ref": "main",
       "release_critical": true,
-      "notes": "Direct wrapper build pin that replaces the pyMC Repeater dependency with a reviewed pyMC Core checkout."
+      "notes": "Reviewed source pin for the renamed OpenHop Core lineage. The renamed repeater runtime imports the published openhop_core package."
     },
     {
       "id": "pymc_console_dist",

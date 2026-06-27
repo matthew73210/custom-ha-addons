@@ -3,22 +3,21 @@ set -euo pipefail
 
 CONFIG_ROOT="/config/pymc-repeater"
 DATA_ROOT="/data/pymc-repeater"
-ETC_ROOT="/etc/pymc_repeater"
-VAR_ROOT="/var/lib/pymc_repeater"
+ETC_ROOT="/etc/openhop_repeater"
+VAR_ROOT="/var/lib/openhop_repeater"
+LEGACY_ETC_ROOT="/etc/pymc_repeater"
+LEGACY_VAR_ROOT="/var/lib/pymc_repeater"
 CONFIG_PATH="${CONFIG_ROOT}/config.yaml"
 PYTHON_BIN="/opt/venv/bin/python3"
 
 mkdir -p "${CONFIG_ROOT}" "${DATA_ROOT}"
 
-if [ -e "${ETC_ROOT}" ] && [ ! -L "${ETC_ROOT}" ]; then
-  rm -rf "${ETC_ROOT}"
-fi
-ln -sfn "${CONFIG_ROOT}" "${ETC_ROOT}"
-
-if [ -e "${VAR_ROOT}" ] && [ ! -L "${VAR_ROOT}" ]; then
-  rm -rf "${VAR_ROOT}"
-fi
-ln -sfn "${CONFIG_ROOT}" "${VAR_ROOT}"
+for path in "${ETC_ROOT}" "${VAR_ROOT}" "${LEGACY_ETC_ROOT}" "${LEGACY_VAR_ROOT}"; do
+  if [ -e "${path}" ] && [ ! -L "${path}" ]; then
+    rm -rf "${path}"
+  fi
+  ln -sfn "${CONFIG_ROOT}" "${path}"
+done
 
 MIGRATION_RESULT="$("${PYTHON_BIN}" - <<'PY'
 import os
@@ -300,9 +299,70 @@ done <<< "${MIGRATION_RESULT}"
 while IFS= read -r line; do
   bashio::log.info "${line}"
 done <<< "${CONFIG_ACTION}"
+bashio::log.info "/etc/openhop_repeater/config.yaml -> ${CONFIG_PATH}."
+bashio::log.info "/var/lib/openhop_repeater -> ${CONFIG_ROOT}."
 bashio::log.info "/etc/pymc_repeater/config.yaml -> ${CONFIG_PATH}."
 bashio::log.info "/var/lib/pymc_repeater -> ${CONFIG_ROOT}."
-bashio::log.info "Persistent pyMC Repeater data path is ${CONFIG_ROOT}."
+bashio::log.info "Persistent OpenHop/pyMC Repeater data path is ${CONFIG_ROOT}."
+
+log_config_diagnostics() {
+  local phase="$1"
+  "${PYTHON_BIN}" - "${phase}" <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
+import hashlib
+import pathlib
+import sys
+
+import yaml
+
+phase = sys.argv[1]
+config_path = pathlib.Path("/config/pymc-repeater/config.yaml")
+try:
+    real_path = config_path.resolve(strict=False)
+except Exception:
+    real_path = config_path
+
+try:
+    raw = config_path.read_bytes()
+    checksum = hashlib.sha256(raw).hexdigest()
+    stat = config_path.stat()
+    config = yaml.safe_load(raw.decode("utf-8")) or {}
+    mtime = int(stat.st_mtime)
+except Exception as exc:
+    print(f"{phase}: active_config_source=persistent-file active_config_path={config_path} resolved_path={real_path} read_error={exc}")
+    raise SystemExit(0)
+
+radio_type = str(config.get("radio_type", "")).strip().lower() or "unset"
+selected_host = ""
+selected_port = ""
+if radio_type == "pymc_tcp":
+    section = config.get("pymc_tcp") or {}
+    selected_host = str(section.get("host", "")).strip()
+    selected_port = str(section.get("port", "")).strip()
+elif radio_type == "pymc_usb":
+    section = config.get("pymc_usb") or {}
+    selected_port = str(section.get("port", "")).strip()
+elif radio_type in {"kiss", "kiss-modem"}:
+    section = config.get("kiss") or {}
+    selected_port = str(section.get("port", "")).strip()
+elif radio_type in {"sx1262", "sx1262_ch341"}:
+    section = config.get("sx1262") or {}
+    selected_port = str(
+        section.get("gpiochip")
+        or section.get("gpio_chip_path")
+        or section.get("gpiochip_path")
+        or "/dev/gpiochip0"
+    ).strip()
+
+print(
+    f"{phase}: active_config_source=persistent-file active_config_path={config_path} "
+    f"resolved_path={real_path} mtime={mtime} sha256={checksum} "
+    f"radio_type={radio_type} selected_host={selected_host or '<none>'} "
+    f"selected_port={selected_port or '<none>'}"
+)
+PY
+}
+
+log_config_diagnostics "before-preflight"
 
 PREFLIGHT_RESULT="$("${PYTHON_BIN}" - <<'PY'
 import os

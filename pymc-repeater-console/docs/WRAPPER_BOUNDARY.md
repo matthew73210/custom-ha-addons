@@ -1,14 +1,14 @@
 # Wrapper Boundary
 
-`pymc-repeater-console` is a Home Assistant wrapper around upstream pyMC Repeater and pyMC Console. The prime directive is simple: this app must remain a wrapper, not a fork.
+`pymc-repeater-console` is a Home Assistant wrapper around upstream OpenHop Repeater, formerly pyMC Repeater, and pyMC Console. The prime directive is simple: this app must remain a wrapper, not a fork.
 
-The wrapper may adapt packaging, persistence, process supervision, and Home Assistant ingress transport. It must not modify, patch, monkey-patch, replace, or reimplement upstream pyMC Repeater or pyMC Console behavior unless an exception is unavoidable for Home Assistant packaging, clearly documented, and isolated as wrapper infrastructure.
+The wrapper may adapt packaging, persistence, process supervision, and Home Assistant ingress transport. It must not modify, patch, monkey-patch, replace, or reimplement upstream OpenHop Repeater or pyMC Console behavior unless an exception is unavoidable for Home Assistant packaging, clearly documented, and isolated as wrapper infrastructure.
 
 ## Current Boundary Status
 
 Build/filesystem status:
 
-- Upstream pyMC Repeater and pyMC Console are fetched during the Docker build.
+- Upstream OpenHop Repeater and pyMC Console are fetched during the Docker build.
 - No upstream Python source, frontend bundle, API module, static asset, or template is patched on disk by the wrapper.
 - No upstream source tree is vendored in this repository.
 - Build/filesystem layer verdict: wrapper-only.
@@ -29,7 +29,7 @@ The wrapper may own:
 - s6 supervision, service startup, shutdown handling, readiness checks, and log redaction.
 - One-time default config creation when `/config/pymc-repeater/config.yaml` is missing.
 - Preservation of an existing `/config/pymc-repeater/config.yaml` unchanged on later starts.
-- Config persistence and path mapping for `/config/pymc-repeater`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater`.
+- Config persistence and path mapping for `/config/pymc-repeater`, `/etc/openhop_repeater`, `/var/lib/openhop_repeater`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater`.
 - Home Assistant ingress base-path, path prefix, header, cookie, redirect, and WebSocket transport adaptation.
 - Transparent reverse proxying where upstream receives the request and upstream response content is passed through unchanged.
 - Path-only normalization such as `/api/api/*` to `/api/*` when it corrects an ingress/client duplicate-prefix issue without changing request or response content.

@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "verification_date": "2026-05-29",
+  "verification_date": "2026-06-27",
   "purpose": "Track reviewed upstream refs used by default for pymc-repeater-console release builds.",
   "status_note": "Default release builds use reviewed commit SHAs. The read-only upstream merge-readiness workflow compares those pins with watched upstream branches.",
   "release_policy": {
-    "default_builds": "use reviewed commit SHAs for pyMC Repeater, pyMC_core, and pyMC Console dist",
+    "default_builds": "use reviewed commit SHAs for OpenHop Repeater, OpenHop Core, and pyMC Console dist",
     "override_builds": "may set PYMC_REPEATER_REF, PYMC_CORE_REF, or PYMC_CONSOLE_REF to a branch, tag, or commit SHA for review or recovery",
     "upstream_drift": "must be detected and reported by the read-only upstream merge-readiness workflow, not hidden by compatibility shims",
     "pin_updates": "manual review only; workflows must not update pins automatically"
@@ -15,17 +15,19 @@
       "verification_date": "2026-05-29",
       "contract_test_status": "source-level tests pass; live container build/test should record resolved SHAs",
       "pymc_repeater": {
-        "repository": "pyMC-dev/pyMC_Repeater",
-        "requested_ref": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
-        "resolved_sha_observed": "e17d1137ab2d2d5b86d03c99523272289b7688aa",
+        "repository": "openhop-dev/openhop_repeater",
+        "requested_ref": "60357f580876ceab5b3808a7ed00f81ae235c003",
+        "resolved_sha_observed": "60357f580876ceab5b3808a7ed00f81ae235c003",
         "status": "reviewed-release-pin",
-        "verification_note": "Upstream main includes config-file radio selection for radio_type=pymc_tcp and radio_type=pymc_usb."
+        "verification_note": "Upstream was renamed from pyMC Repeater to OpenHop Repeater; Python import package remains repeater and includes radio_type=pymc_tcp and radio_type=pymc_usb."
       },
       "pymc_core": {
-        "repository": "pyMC-dev/pyMC_core",
+        "repository": "openhop-dev/openhop_core",
         "requested_ref": "330e32d57b9321afd63c38e634fa076a5049afee",
         "resolved_sha_observed": "330e32d57b9321afd63c38e634fa076a5049afee",
-        "status": "reviewed-release-pin"
+        "status": "reviewed-release-pin",
+        "runtime_package": "openhop_core",
+        "runtime_package_version": "1.1.1"
       },
       "pymc_console_dist": {
         "repository": "dmduran12/pymc_console-dist",

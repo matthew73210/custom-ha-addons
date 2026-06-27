@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.4
+
+- Updated the add-on to the upstream OpenHop Repeater rename at `60357f580876ceab5b3808a7ed00f81ae235c003`.
+- Switched default repeater source to `openhop-dev/openhop_repeater` and core source tracking to `openhop-dev/openhop_core`.
+- Added explicit OpenHop Core runtime package installation and import checks for `openhop_core` modem drivers.
+- Kept `/config/pymc-repeater` as the persistent source of truth while adding `/etc/openhop_repeater` and `/var/lib/openhop_repeater` symlinks alongside legacy pyMC paths.
+- Added startup config diagnostics before preflight and runtime launch, including path, mtime, checksum, selected `radio_type`, and selected host/port.
+- Kept builds 64-bit only: `amd64` and `aarch64`.
+
 ## 0.3.3
 
 - Fixed a wrapper regression introduced by the `pymc_usb` protocol preflight: no-response GET_VERSION/PING diagnostics now default to warning-only instead of stopping startup before upstream pyMC Repeater can run.

@@ -11,6 +11,7 @@ DIRECT_PORT="8000"
 INGRESS_HOST="127.0.0.1"
 INGRESS_PORT="8080"
 READY_TIMEOUT="${PYMC_READY_TIMEOUT:-60}"
+export OPENHOP_REPEATER_CONFIG="${CONFIG_PATH}"
 export PYMC_REPEATER_CONFIG="${CONFIG_PATH}"
 
 LOG_LEVEL="$("${PYTHON_BIN}" - <<'PY'
@@ -152,6 +153,61 @@ if db_path.exists():
                 print("sqlite table counts: no known pyMC tables found")
     except Exception as exc:
         print(f"sqlite table counts unavailable: {exc}")
+PY
+}
+
+log_config_launch_diagnostics() {
+  "${PYTHON_BIN}" - <<'PY' | while IFS= read -r line; do bashio::log.info "config | ${line}"; done
+import hashlib
+import pathlib
+import os
+
+import yaml
+
+config_path = pathlib.Path(os.environ.get("OPENHOP_REPEATER_CONFIG", "/config/pymc-repeater/config.yaml"))
+try:
+    real_path = config_path.resolve(strict=False)
+except Exception:
+    real_path = config_path
+
+try:
+    raw = config_path.read_bytes()
+    checksum = hashlib.sha256(raw).hexdigest()
+    stat = config_path.stat()
+    config = yaml.safe_load(raw.decode("utf-8")) or {}
+    mtime = int(stat.st_mtime)
+except Exception as exc:
+    print(f"before-runtime: active_config_source=persistent-file active_config_path={config_path} resolved_path={real_path} read_error={exc}")
+    raise SystemExit(0)
+
+radio_type = str(config.get("radio_type", "")).strip().lower() or "unset"
+selected_host = ""
+selected_port = ""
+if radio_type == "pymc_tcp":
+    section = config.get("pymc_tcp") or {}
+    selected_host = str(section.get("host", "")).strip()
+    selected_port = str(section.get("port", "")).strip()
+elif radio_type == "pymc_usb":
+    section = config.get("pymc_usb") or {}
+    selected_port = str(section.get("port", "")).strip()
+elif radio_type in {"kiss", "kiss-modem"}:
+    section = config.get("kiss") or {}
+    selected_port = str(section.get("port", "")).strip()
+elif radio_type in {"sx1262", "sx1262_ch341"}:
+    section = config.get("sx1262") or {}
+    selected_port = str(
+        section.get("gpiochip")
+        or section.get("gpio_chip_path")
+        or section.get("gpiochip_path")
+        or "/dev/gpiochip0"
+    ).strip()
+
+print(
+    f"before-runtime: active_config_source=persistent-file active_config_path={config_path} "
+    f"resolved_path={real_path} mtime={mtime} sha256={checksum} "
+    f"radio_type={radio_type} selected_host={selected_host or '<none>'} "
+    f"selected_port={selected_port or '<none>'}"
+)
 PY
 }
 
@@ -328,13 +384,17 @@ runtime_support_sanity() {
 import inspect
 
 import repeater.config as c
-from pymc_core.hardware.tcp_radio import TCPLoRaRadio
+from openhop_core.hardware.tcp_radio import TCPLoRaRadio
+from openhop_core.hardware.usb_radio import USBLoRaRadio
 
 src = inspect.getsource(c)
 assert "pymc_tcp" in src, "Installed pyMC_Repeater does not contain pymc_tcp support"
 assert "pymc_usb" in src, "Installed pyMC_Repeater does not contain pymc_usb support"
+assert "openhop_core.hardware.tcp_radio" in src, "Installed repeater.config does not use openhop_core TCP support"
+assert "openhop_core.hardware.usb_radio" in src, "Installed repeater.config does not use openhop_core USB support"
 print(f"pymc_tcp and pymc_usb support present in installed repeater.config: {c.__file__}")
 print(f"TCPLoRaRadio import OK: {TCPLoRaRadio}")
+print(f"USBLoRaRadio import OK: {USBLoRaRadio}")
 PY
   )
 }
@@ -444,6 +504,7 @@ log_upstream_metadata
 if [ "${DEBUG_LOG}" = "true" ]; then
   log_redacted_config
 fi
+log_config_launch_diagnostics
 log_storage_diagnostics
 log_lbt_diagnostics
 runtime_support_sanity | while IFS= read -r line; do bashio::log.info "runtime | ${line}"; done

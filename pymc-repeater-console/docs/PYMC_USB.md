@@ -1,6 +1,6 @@
 # pyMC USB Runtime Configuration
 
-`pymc-repeater-console` must not expose pyMC USB settings as Home Assistant add-on UI options. The radio selection, serial device path, network host, network port, baudrate, and LBT settings belong in the persisted pyMC Repeater config file:
+`pymc-repeater-console` must not expose pyMC USB settings as Home Assistant add-on UI options. The radio selection, serial device path, network host, network port, baudrate, and LBT settings belong in the persisted OpenHop Repeater config file:
 
 ```text
 /config/pymc-repeater/config.yaml
@@ -8,7 +8,7 @@
 
 ## Upstream Support
 
-The reviewed pyMC Repeater release pin supports the pymc-usb-compatible modem family in two ways:
+The reviewed OpenHop Repeater release pin supports the pymc-usb-compatible modem family in two ways:
 
 - Local USB serial mode uses `radio_type: pymc_usb` and the `pymc_usb` config section.
 - TCP/IP mode to a remote pymc-usb-compatible firmware endpoint uses `radio_type: pymc_tcp` and the `pymc_tcp` config section.
@@ -53,7 +53,7 @@ The upstream setup logic recognizes serial paths matching:
 
 Use this when the pymc-usb-compatible device is exposed over the network.
 
-Upstream pyMC Repeater does not accept `host`, `ip`, `tcp`, `socket`, `url`, or `serial-over-tcp` keys under the `pymc_usb` section. The accepted TCP/IP schema is the upstream `pymc_tcp` transport:
+Upstream OpenHop Repeater does not accept `host`, `ip`, `tcp`, `socket`, `url`, or `serial-over-tcp` keys under the `pymc_usb` section. The accepted TCP/IP schema is the upstream `pymc_tcp` transport:
 
 ```yaml
 radio_type: pymc_tcp
@@ -69,7 +69,7 @@ pymc_tcp:
 
 Use `pymc_tcp.host` for the remote device IP address or hostname. Use `pymc_tcp.port` for the remote TCP port; pymc-usb firmware commonly uses `5055`. `baudrate` is not used by upstream in TCP/IP mode because there is no local serial link.
 
-Investigation note: upstream pyMC Repeater `main` routes TCP/IP pymc-usb-compatible firmware through `radio_type: pymc_tcp`, not through extra network keys under `pymc_usb`.
+Investigation note: upstream OpenHop Repeater `main` routes TCP/IP pymc-usb-compatible firmware through `radio_type: pymc_tcp`, not through extra network keys under `pymc_usb`.
 
 ## Home Assistant Add-On Boundary
 
@@ -84,7 +84,7 @@ If Home Assistant Supervisor requires narrower or additional device mapping for 
 
 ## LBT Graphs
 
-For `pymc_usb` and `pymc_tcp`, upstream pyMC_core performs CAD before transmit when
+For `pymc_usb` and `pymc_tcp`, upstream OpenHop Core performs CAD before transmit when
 `lbt_enabled` is true. It records a positive `lbt_attempts` count only when CAD
 reports a busy channel and a backoff occurs. Console Signal Lab filters LBT chart
 points to stored packets with `lbt_attempts > 0`, so an empty graph does not by
@@ -95,13 +95,13 @@ LBT packet count at startup. It does not generate substitute LBT values.
 
 ## Startup Behavior
 
-The wrapper creates `/config/pymc-repeater/config.yaml` once if it is missing and then preserves it unchanged on later starts. Startup passes the real persisted runtime config file to upstream pyMC Repeater unchanged through:
+The wrapper creates `/config/pymc-repeater/config.yaml` once if it is missing and then preserves it unchanged on later starts. Startup passes the real persisted runtime config file to upstream OpenHop Repeater unchanged through:
 
 ```text
 python -m repeater.main --config /config/pymc-repeater/config.yaml
 ```
 
-`PYMC_REPEATER_CONFIG` also points at `/config/pymc-repeater/config.yaml`. `/etc/pymc_repeater` is still a wrapper symlink to the persisted `/config/pymc-repeater` directory for upstream compatibility.
+`OPENHOP_REPEATER_CONFIG` and `PYMC_REPEATER_CONFIG` also point at `/config/pymc-repeater/config.yaml`. `/etc/openhop_repeater` and `/var/lib/openhop_repeater` are wrapper symlinks to the persisted directory for the renamed upstream; `/etc/pymc_repeater` and `/var/lib/pymc_repeater` remain legacy symlinks so existing installs keep their data/config.
 
 When `radio_type` is `pymc_usb`, startup requires the configured `pymc_usb.port` to exist, be a character device, and be readable/writable inside the add-on container. When `radio_type` is `pymc_tcp`, startup requires the configured host and port to resolve and accept a TCP connection.
 
@@ -119,4 +119,4 @@ Valid values:
 - `fatal`: run the wrapper preflight and fail startup if no valid GET_VERSION/PING response is decoded.
 - `off`: skip the wrapper protocol preflight.
 
-Some working pymc-usb firmware may not answer wrapper GET_VERSION/PING probes even though upstream pyMC Repeater can use the device. For that reason, no response from the wrapper preflight is not fatal unless `pymc_usb_preflight: fatal` is set. The wrapper does not rewrite the persisted config, and upstream still receives `/config/pymc-repeater/config.yaml` through `--config`.
+Some working pymc-usb firmware may not answer wrapper GET_VERSION/PING probes even though upstream OpenHop Repeater can use the device. For that reason, no response from the wrapper preflight is not fatal unless `pymc_usb_preflight: fatal` is set. The wrapper does not rewrite the persisted config, and upstream still receives `/config/pymc-repeater/config.yaml` through `--config`.

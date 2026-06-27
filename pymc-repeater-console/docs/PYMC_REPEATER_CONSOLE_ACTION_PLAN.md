@@ -35,7 +35,7 @@ Allowed wrapper behavior:
 - s6 supervision, service startup, readiness checks, shutdown handling, and log redaction.
 - One-time default upstream config creation when `/config/pymc-repeater/config.yaml` is missing.
 - Preserving an existing `/config/pymc-repeater/config.yaml` unchanged on later starts.
-- Config persistence and path mapping for `/config/pymc-repeater`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater`.
+- Config persistence and path mapping for `/config/pymc-repeater`, `/etc/openhop_repeater`, `/var/lib/openhop_repeater`, `/etc/pymc_repeater`, and `/var/lib/pymc_repeater`.
 - Ingress base-path, path prefix, header, cookie, redirect, and WebSocket transport adaptation.
 - Transparent reverse proxying where upstream receives the request and upstream response content is passed through unchanged.
 - Wrapper diagnostics that do not masquerade as upstream APIs and do not alter upstream behavior.

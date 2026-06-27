@@ -6,16 +6,16 @@ The goal is not to build compatibility shims that mask upstream changes. The goa
 
 ## Upstream Projects
 
-pyMC Repeater:
+OpenHop Repeater:
 
-- Repository: `https://github.com/pyMC-dev/pyMC_Repeater.git`
-- GitHub slug: `pyMC-dev/pyMC_Repeater`
+- Repository: `https://github.com/openhop-dev/openhop_repeater.git`
+- GitHub slug: `openhop-dev/openhop_repeater`
 - Build argument: `PYMC_REPEATER_REF`
 
-pyMC Core:
+OpenHop Core:
 
-- Repository: `https://github.com/pyMC-dev/pyMC_core.git`
-- GitHub slug: `pyMC-dev/pyMC_core`
+- Repository: `https://github.com/openhop-dev/openhop_core.git`
+- GitHub slug: `openhop-dev/openhop_core`
 - Build argument: `PYMC_CORE_REF`
 
 pyMC Console dist:
@@ -30,17 +30,18 @@ Reviewed release refs are recorded in `compatibility/known-good-upstreams.json`.
 
 Current reviewed release pins:
 
-- pyMC Repeater: `e17d1137ab2d2d5b86d03c99523272289b7688aa`
-- pyMC Core: `330e32d57b9321afd63c38e634fa076a5049afee`
+- OpenHop Repeater: `60357f580876ceab5b3808a7ed00f81ae235c003`
+- OpenHop Core source: `330e32d57b9321afd63c38e634fa076a5049afee`
+- OpenHop Core runtime package: `openhop_core==1.1.1`
 - pyMC Console dist: `2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 
-These fixed SHAs are the Dockerfile defaults and the publishing workflow defaults. On 2026-05-29, the reviewed pyMC Repeater pin included the config-file radio selection branches for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
+These fixed SHAs are the Dockerfile defaults and the publishing workflow defaults. On 2026-06-27, the reviewed OpenHop Repeater pin included the upstream rename plus config-file radio selection branches for `radio_type: pymc_tcp` and `radio_type: pymc_usb`.
 
 ## Release Policy
 
 Release/default builds use reviewed commit SHAs:
 
-- `PYMC_REPEATER_REF=e17d1137ab2d2d5b86d03c99523272289b7688aa`
+- `PYMC_REPEATER_REF=60357f580876ceab5b3808a7ed00f81ae235c003`
 - `PYMC_CORE_REF=330e32d57b9321afd63c38e634fa076a5049afee`
 - `PYMC_CONSOLE_REF=2d961cef1ae1a355eb06e34fba99788d9ffca44a`
 
@@ -105,7 +106,7 @@ Docker labels cannot be populated from values discovered inside a `RUN` step wit
 
 Startup logs expose upstream version metadata from `/usr/share/pymc-repeater-console/upstream-build-info.json` without changing runtime behavior:
 
-- pyMC Repeater requested ref and resolved SHA.
+- OpenHop Repeater requested ref and resolved SHA.
 - pyMC Console dist requested ref and resolved SHA.
 - pyMC Console dist version.
 
@@ -195,7 +196,7 @@ CI runs both source-level tests and live-container tests. Live-container tests r
 
 ## pyMC USB Tracking
 
-The reviewed pyMC Repeater release pin supports the pymc-usb-compatible modem family in two transport configurations:
+The reviewed OpenHop Repeater release pin supports the pymc-usb-compatible modem family in two transport configurations:
 
 - Local serial: `radio_type: pymc_usb`, `pymc_usb.port`, optional `pymc_usb.baudrate`.
 - Remote TCP/IP: `radio_type: pymc_tcp`, `pymc_tcp.host`, `pymc_tcp.port`.

@@ -274,8 +274,37 @@ def test_existing_persistent_config_is_preserved_unchanged(tmp_path):
 def test_backend_uses_real_persistent_config_path_for_saves():
     run_script = RUN_SCRIPT.read_text(encoding="utf-8")
     assert 'CONFIG_PATH="/config/pymc-repeater/config.yaml"' in run_script
+    assert 'export OPENHOP_REPEATER_CONFIG="${CONFIG_PATH}"' in run_script
     assert 'export PYMC_REPEATER_CONFIG="${CONFIG_PATH}"' in run_script
     assert '--config "${CONFIG_PATH}"' in run_script
+
+
+def test_startup_links_openhop_and_legacy_config_paths():
+    startup_text = CONT_INIT_SCRIPT.read_text(encoding="utf-8")
+    for expected in (
+        'ETC_ROOT="/etc/openhop_repeater"',
+        'VAR_ROOT="/var/lib/openhop_repeater"',
+        'LEGACY_ETC_ROOT="/etc/pymc_repeater"',
+        'LEGACY_VAR_ROOT="/var/lib/pymc_repeater"',
+        "/etc/openhop_repeater/config.yaml ->",
+        "/var/lib/openhop_repeater ->",
+        "/etc/pymc_repeater/config.yaml ->",
+        "/var/lib/pymc_repeater ->",
+    ):
+        assert expected in startup_text
+
+
+def test_config_diagnostics_logged_before_preflight_and_runtime():
+    startup_text = CONT_INIT_SCRIPT.read_text(encoding="utf-8")
+    run_script = RUN_SCRIPT.read_text(encoding="utf-8")
+    for text, phase in ((startup_text, "before-preflight"), (run_script, "before-runtime")):
+        assert phase in text
+        assert "active_config_source=persistent-file" in text
+        assert "active_config_path=" in text
+        assert "sha256=" in text
+        assert "radio_type=" in text
+        assert "selected_host=" in text
+        assert "selected_port=" in text
 
 
 def test_missing_persistent_config_is_created_once(tmp_path):
@@ -468,8 +497,17 @@ def test_upstream_launch_path_remains_after_warning_preflight_failure(tmp_path):
     assert "pymc_usb preflight warning:" in output
     assert "ok" in output.splitlines()
     assert 'CONFIG_PATH="/config/pymc-repeater/config.yaml"' in run_script
+    assert 'export OPENHOP_REPEATER_CONFIG="${CONFIG_PATH}"' in run_script
     assert 'export PYMC_REPEATER_CONFIG="${CONFIG_PATH}"' in run_script
     assert '"${PYTHON_BIN}" -m repeater.main --config "${CONFIG_PATH}"' in run_script
+
+
+def test_runtime_sanity_checks_openhop_core_imports():
+    run_script = RUN_SCRIPT.read_text(encoding="utf-8")
+    assert "from openhop_core.hardware.tcp_radio import TCPLoRaRadio" in run_script
+    assert "from openhop_core.hardware.usb_radio import USBLoRaRadio" in run_script
+    assert "openhop_core.hardware.tcp_radio" in run_script
+    assert "openhop_core.hardware.usb_radio" in run_script
 
 
 def test_ci_safe_contract_config_does_not_use_sx1262_default():
