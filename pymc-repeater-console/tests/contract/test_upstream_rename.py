@@ -30,4 +30,4 @@ def test_dockerfile_checks_renamed_openhop_core_imports():
 def test_addon_version_bumped_for_openhop_update():
     config_yaml = CONFIG_YAML.read_text(encoding="utf-8")
 
-    assert "version: 0.3.4" in config_yaml
+    assert "version: 0.3.5" in config_yaml

@@ -2,7 +2,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.3.4
+ARG BUILD_VERSION=0.3.5
 ARG BUILD_ARCH=amd64
 ARG BUILD_DATE=
 ARG PYMC_REPEATER_REPO=https://github.com/openhop-dev/openhop_repeater.git

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+- Added wrapper-only ingress proxy coverage for the preserved Repeater UI Leaflet map assets, including CARTO `a`-`d` tile subdomains and restricted Leaflet marker images from `unpkg.com`.
+- Expanded Nginx failure diagnostics with request timing, upstream timing, and content type fields to make frontend/API route drift easier to separate from wrapper transport failures.
+- Kept upstream pyMC Repeater and pyMC Console application behavior unchanged.
+
 ## 0.3.4
 
 - Updated the add-on to the upstream OpenHop Repeater rename at `60357f580876ceab5b3808a7ed00f81ae235c003`.
