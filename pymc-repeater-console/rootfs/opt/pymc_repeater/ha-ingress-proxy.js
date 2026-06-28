@@ -54,8 +54,15 @@
     if (url.hostname === 'basemaps.cartocdn.com') {
       return '/_pymc_map_proxy/basemaps' + url.pathname + url.search + url.hash;
     }
+    var cartoSubdomain = url.hostname.match(/^([a-d])\.basemaps\.cartocdn\.com$/);
+    if (cartoSubdomain) {
+      return '/_pymc_map_proxy/basemaps-' + cartoSubdomain[1] + url.pathname + url.search + url.hash;
+    }
     if (url.hostname === 'tiles.basemaps.cartocdn.com') {
       return '/_pymc_map_proxy/tiles' + url.pathname + url.search + url.hash;
+    }
+    if (url.hostname === 'unpkg.com' && url.pathname.indexOf('/leaflet@1.9.4/dist/images/') === 0) {
+      return '/_pymc_map_proxy/unpkg' + url.pathname + url.search + url.hash;
     }
     return null;
   }

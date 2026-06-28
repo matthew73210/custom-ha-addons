@@ -82,7 +82,7 @@ Use your Home Assistant host IP and the configured host port. Do not use Docker-
 
 Ingress is enabled. Home Assistant opens the app through a wrapper-owned Nginx proxy on port `8080`. The same proxy also listens inside the container on `127.0.0.1:8000` for direct diagnostics. The upstream OpenHop Repeater backend runs behind the wrapper on `127.0.0.1:8001`.
 
-The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. Contacts map basemap/style requests are routed through a wrapper-owned same-origin proxy so MapLibre tile, sprite, and glyph URLs keep working under Home Assistant ingress without hardcoding an ingress URL. The proxy also normalizes duplicate `/api/api/...` requests emitted by some original Repeater UI panels so settings such as TX Delays can save without patching upstream assets. The app does not expose host ports by default.
+The proxy preserves request methods, query strings, POST bodies, form data, cookies, response `Set-Cookie` headers, redirects, `Host` and `X-Forwarded-*` headers, WebSocket or streaming upgrade headers, and Console worker asset URLs. The worker URL shim rewrites `Worker` and `SharedWorker` constructor URLs to the Home Assistant ingress prefix while preserving module-worker options for Safari and Chromium browsers. Contacts map basemap/style requests are routed through a wrapper-owned same-origin proxy so MapLibre tile, sprite, and glyph URLs keep working under Home Assistant ingress without hardcoding an ingress URL. The preserved Repeater location picker also sends its CARTO subdomain tiles and Leaflet marker images through the same-origin map proxy. The proxy also normalizes duplicate `/api/api/...` requests emitted by some original Repeater UI panels so settings such as TX Delays can save without patching upstream assets. The app does not expose host ports by default.
 
 Console packet-cache and graph routes are proxied to the upstream backend unchanged. The wrapper no longer serves `/api/bulk_packets`, `/api/recent_packets`, `/api/filtered_packets`, or `/api/analytics/*` from local SQLite data. If upstream does not provide an analytics route, the wrapper lets upstream fail natively instead of synthesizing analytics.
 
@@ -96,7 +96,7 @@ The bundled Console frontend route audit covers:
 - Upstream WebSockets: `/ws/packets` and `/ws/companion_frame`
 - Console assets: `/assets/*` and `/favicon.ico`
 - Preserved original Repeater UI: `/repeater/` and its assets
-- Wrapper-owned Carto ingress adaptation: `/_pymc_map_proxy/basemaps/*` and `/_pymc_map_proxy/tiles/*`
+- Wrapper-owned map/static ingress adaptation: `/_pymc_map_proxy/basemaps*/*`, `/_pymc_map_proxy/tiles/*`, and restricted Leaflet marker image proxying under `/_pymc_map_proxy/unpkg/leaflet@1.9.4/dist/images/*`
 
 The default Nginx location forwards Console REST, auth, WebSocket, static, and SPA requests to OpenHop Repeater unchanged. Wrapper exceptions are limited to ingress URL adaptation, `/api/api/*` path normalization for the original Repeater UI, the preserved `/repeater/` UI mount, and the Carto same-origin proxy.
 
@@ -169,7 +169,7 @@ If Home Assistant Supervisor logs warnings about old options such as `node_name`
 
 Normal startup logging is intentionally concise: it prints the selected backend/direct/ingress ports, active config path, config mtime/checksum, selected radio endpoint, resolved storage paths, `repeater.db` and `metrics.rrd` presence, selected SQLite table counts, and startup completion. Full redacted config output, listener dumps, and endpoint parity probes are only emitted when `logging.level` in `/config/pymc-repeater/config.yaml` is set to `DEBUG` or when startup fails. The wrapper no longer performs WebSocket readiness probes during normal startup, which avoids noisy expected close errors from the backend.
 
-Nginx logs worker asset requests plus failed auth/API/WebSocket/map-proxy requests with status, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values. A failed ingress request with an upstream address reached OpenHop Repeater; a `502` or missing upstream address points to wrapper/backend reachability instead.
+Nginx logs worker asset requests plus failed auth/API/WebSocket/map-proxy requests with status, response size, request time, upstream response time, content type, upstream target, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values. A failed ingress request with an upstream address reached OpenHop Repeater; a `502` or missing upstream address points to wrapper/backend reachability instead.
 
 The wrapper sets:
 

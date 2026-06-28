@@ -101,7 +101,12 @@ def test_wrapper_exceptions_are_explicit_and_transport_only():
     for location in (
         "location ^~ /api/api/",
         "location ^~ /_pymc_map_proxy/basemaps/",
+        "location ^~ /_pymc_map_proxy/basemaps-a/",
+        "location ^~ /_pymc_map_proxy/basemaps-b/",
+        "location ^~ /_pymc_map_proxy/basemaps-c/",
+        "location ^~ /_pymc_map_proxy/basemaps-d/",
         "location ^~ /_pymc_map_proxy/tiles/",
+        "location ^~ /_pymc_map_proxy/unpkg/leaflet@1.9.4/dist/images/",
         "location = /repeater",
         "location ^~ /repeater/",
     ):
@@ -124,6 +129,18 @@ def test_failed_console_route_diagnostics_cover_forwarded_namespaces():
     assert "~^/auth/.*:[45][0-9][0-9] 1;" in nginx
     assert "~^/api/.*:[45][0-9][0-9] 1;" in nginx
     assert "~^/ws/.*:[45][0-9][0-9] 1;" in nginx
+    assert "request_time=$request_time" in nginx
+    assert 'upstream_time="$upstream_response_time"' in nginx
+    assert 'content_type="$sent_http_content_type"' in nginx
+
+
+def test_ingress_helper_proxies_repeater_leaflet_external_assets():
+    helper = INGRESS_HELPER.read_text(encoding="utf-8")
+
+    assert r"^([a-d])\.basemaps\.cartocdn\.com$" in helper
+    assert "/_pymc_map_proxy/basemaps-" in helper
+    assert "unpkg.com" in helper
+    assert "/leaflet@1.9.4/dist/images/" in helper
 
 
 def test_startup_diagnostics_report_lbt_requirements_without_faking_values():

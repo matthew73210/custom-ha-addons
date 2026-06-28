@@ -72,7 +72,8 @@ The Console dist `main` audit at commit `2d961cef1ae1a355eb06e34fba99788d9ffca44
 - `/auth/login` and `/auth/refresh` for sessions.
 - `/ws/packets` and `/ws/companion_frame` for live WebSocket traffic.
 - `/assets/*` and `/favicon.ico` for Console static files and worker scripts.
-- Carto style and tile URLs routed through `/_pymc_map_proxy/basemaps/*` and `/_pymc_map_proxy/tiles/*`.
+- Carto style and tile URLs routed through `/_pymc_map_proxy/basemaps*/*` and `/_pymc_map_proxy/tiles/*`.
+- Preserved Repeater Leaflet marker images routed through restricted `/_pymc_map_proxy/unpkg/leaflet@1.9.4/dist/images/*`.
 
 The default Nginx proxy forwards the upstream namespaces unchanged. Explicit locations are limited to wrapper-owned helper assets, duplicate `/api/api/*` path normalization, the preserved `/repeater/` UI mount, and the Carto same-origin proxy.
 
@@ -80,7 +81,7 @@ Current Console dist calls `/api/analytics/*`, but the audited pyMC Repeater `ma
 
 ## Diagnosing Failures
 
-Nginx writes failure-only diagnostics for `/auth/*`, `/api/*`, `/ws/*`, and `/_pymc_map_proxy/*`. Each line includes status, upstream address, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
+Nginx writes failure-only diagnostics for `/auth/*`, `/api/*`, `/ws/*`, and `/_pymc_map_proxy/*`. Each line includes status, response size, request time, upstream response time, content type, upstream address, auth-header presence, token-query presence, upgrade header, host, and ingress prefix presence without logging token values.
 
 When persisted `logging.level` is `DEBUG`, startup compares direct-wrapper and ingress responses for representative Console auth, history, graph, hardware, companion, and analytics routes. Matching status and response metadata show that ingress forwarding is transparent even when upstream intentionally returns `401`, `404`, or `405`.
 

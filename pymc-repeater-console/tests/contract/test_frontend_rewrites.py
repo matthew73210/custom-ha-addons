@@ -54,6 +54,26 @@ def test_carto_proxy_routes_remain_transport_only_inventory():
     assert "sub_filter" not in tile_block
 
 
+def test_repeater_leaflet_proxy_routes_are_transport_only_inventory():
+    nginx = nginx_text()
+    for subdomain in ("a", "b", "c", "d"):
+        block = nginx.split(
+            f"location ^~ /_pymc_map_proxy/basemaps-{subdomain}/ {{",
+            1,
+        )[1].split("\n    }", 1)[0]
+        assert f"proxy_pass https://{subdomain}.basemaps.cartocdn.com;" in block
+        assert f"proxy_set_header Host {subdomain}.basemaps.cartocdn.com;" in block
+        assert "sub_filter" not in block
+
+    marker_block = nginx.split(
+        "location ^~ /_pymc_map_proxy/unpkg/leaflet@1.9.4/dist/images/ {",
+        1,
+    )[1].split("\n    }", 1)[0]
+    assert "proxy_pass https://unpkg.com;" in marker_block
+    assert "proxy_set_header Host unpkg.com;" in marker_block
+    assert "sub_filter" not in marker_block
+
+
 def test_remaining_sub_filter_rules_are_intentional_inventory():
     actual_rules = Counter(
         line.strip()
